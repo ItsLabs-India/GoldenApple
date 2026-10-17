@@ -80,7 +80,7 @@ function createClient(opts = {}) {
       getContext() { return ctx2d; }, toDataURL() { return 'data:image/png;base64,AA'; }
     };
   }
-  const ctx2d = new Proxy({}, { get: (t, k) => k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : (typeof k === 'string' && /^(fill|stroke|clear|draw|save|restore|translate|rotate|beginPath|moveTo|lineTo|closePath|fillText|measureText)/.test(k) ? () => ({ width: 10 }) : t[k]), set: (t, k, v) => { t[k] = v; return true; } });
+  const ctx2d = new Proxy({}, { get: (t, k) => k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : (typeof k === 'string' && /^(fill|stroke|clear|draw|save|restore|translate|rotate|setTransform|scale|beginPath|moveTo|lineTo|closePath|fillText|measureText)/.test(k) ? () => ({ width: 10 }) : t[k]), set: (t, k, v) => { t[k] = v; return true; } });
   function getEl(sel) { if (!els.has(sel)) els.set(sel, el('div', sel.replace(/^#/, '').split('@')[0])); return els.get(sel); }
   const document = {
     activeElement: null, hidden: false,
@@ -124,7 +124,7 @@ function createClient(opts = {}) {
     WebGLRenderer: class { constructor() { this.domElement = el('canvas', 'glcanvas'); this.shadowMap = {}; } setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} },
     Raycaster: class { setFromCamera() {} intersectObjects() { return []; } }, Fog: class {},
     PointLight: class extends Obj { constructor(c, i, d, k) { super(); this.intensity = i; this.distance = d; this.decay = k; } },
-    NearestFilter: 1, RepeatWrapping: 2, PCFSoftShadowMap: 3, DoubleSide: 4, AdditiveBlending: 5
+    NearestFilter: 1, LinearFilter: 6, RepeatWrapping: 2, PCFSoftShadowMap: 3, DoubleSide: 4, AdditiveBlending: 5
   };
 
   // strict Web Audio stub: throws on anything a real browser would reject

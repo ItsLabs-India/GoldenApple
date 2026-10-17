@@ -404,7 +404,7 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(SR.phase === 'show' && g2 < 20 && SR.spins === 2, 'pressing Space again stops the reels early');
   SR.cr = 3; keysDown(' '); keysUp(' '); frames(1, 50); ok(SR.phase !== 'spin' && /Out of credits/.test(SR.msg), 'out of credits: no spin, and a note that more come tomorrow');
   keysDown('Escape'); keysUp('Escape'); frames(1, 50); ok(!ARC.open && Pf.anim.pose === 'stand' && Pf.root.position.y === 0, 'Esc gets you off the stool');
-  const wal = JSON.parse(store.ga_slots); wal[G.myKey()].d = '2000-01-01'; store.ga_slots = JSON.stringify(wal);
+  const wal = JSON.parse(store.ga_slots); wal[G.myKey()].d = '2000-01-01'; wal[G.myKey()].c = 3; store.ga_slots = JSON.stringify(wal);
   ok(G.slotWallet().c === 200, 'the next day your credits are topped back up to 200');
   const sofa = sofaSeats[0]; Pf.root.position.set(sofa.approach.x, 0, sofa.approach.z); G.tryInteract();
   fresh({ en: 30 }); frames(MIN, 50); const sofaGain = Vt.en - 30; G.tryInteract();

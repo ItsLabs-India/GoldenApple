@@ -373,17 +373,21 @@ function bench(cx,cz,rot,color,zone){
 }
 function plant(x,z,s){s=s||1;fbox(x,0.22*s,z,0.42*s,0.44*s,0.42*s,'#b5683e');fbox(x,0.62*s,z,0.6*s,0.5*s,0.6*s,'#3f8f2f');fbox(x,0.98*s,z,0.36*s,0.3*s,0.36*s,'#4fa33a');solidRect(x-0.3,z-0.3,x+0.3,z+0.3,1);}
 
-function textCanvas(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);return c;}
+// one type system for every canvas (signs, boards, screens, the arcade), matching the CSS: FONT_UI (Atkinson Hyperlegible) for
+// all text, FONT_PIX (Pixelify Sans) only for big numbers and the in-game titles (its C reads as an O when small). Canvases with text draw at S x resolution (logical w x h) so text stays sharp.
+const FONT_UI='"Atkinson Hyperlegible",system-ui,"Segoe UI",Roboto,sans-serif',FONT_PIX='"Pixelify Sans","Courier New",monospace';
+function textCanvas(w,h,draw,S){S=S||1;const c=document.createElement('canvas');c.width=w*S;c.height=h*S;const g=c.getContext('2d');if(S!==1)g.setTransform(S,0,0,S,0,0);draw(g,w,h);return c;}
+function textTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t;}// smooth text, no pixel blocks
 const SIGN_DRAWERS=[];
 function sign(x,z,rot,title,sub){
   const fx=Math.sin(rot),fz=Math.cos(rot);
   fbox(x-fx*0.08,0.85,z-fz*0.08,0.14,1.7,0.14,'#6b4a2b');
   fbox(x,1.62,z,2.0,0.74,0.1,'#8c6234','noise',rot);
   solidRect(x-0.3,z-0.3,x+0.3,z+0.3,2);
-  const c=textCanvas(256,96,()=>{});const tex=canvasTex(c);
+  const c=textCanvas(256,96,()=>{},2);const tex=textTex(c);
   const draw=()=>{const g=c.getContext('2d');g.fillStyle='#a8793f';g.fillRect(0,0,256,96);g.fillStyle='#7a5328';for(let y=23;y<96;y+=24)g.fillRect(0,y,256,2);
-    g.fillStyle='#2a1a0c';g.textAlign='center';g.font='600 34px "Pixelify Sans", "Courier New", monospace';g.fillText(title.toUpperCase(),128,46);
-    g.font='500 19px "Pixelify Sans", "Courier New", monospace';g.fillStyle='#4a2f16';g.fillText(sub,128,76);tex.needsUpdate=true;};
+    g.fillStyle='#2a1a0c';g.textAlign='center';g.font='700 32px '+FONT_UI;g.fillText(title.toUpperCase(),128,46);
+    g.font='700 20px '+FONT_UI;g.fillStyle='#4a2f16';g.fillText(sub,128,77);tex.needsUpdate=true;};
   draw();SIGN_DRAWERS.push(draw);
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1.9,0.66),new THREE.MeshBasicMaterial({map:tex}));
   m.position.set(x+fx*0.056,1.62,z+fz*0.056);m.rotation.y=rot;scene.add(m);
@@ -591,7 +595,7 @@ function buildFurniture(){
   for(const s of [-1.2,1.2])fbox(bx+ux*s,0.95,bz+uz*s,0.16,1.9,0.16,'#6b4a2b');
   fbox(bx,1.55,bz,2.8,1.75,0.12,'#7a5328','noise',br);
   solidRect(bx-1,bz-1,bx+1,bz+1,2);
-  boardCanvas=textCanvas(512,320,()=>{});boardTex=canvasTex(boardCanvas);
+  boardCanvas=textCanvas(512,320,()=>{},2);boardTex=textTex(boardCanvas);
   boardMesh=new THREE.Mesh(new THREE.PlaneGeometry(2.62,1.6),new THREE.MeshBasicMaterial({map:boardTex}));
   boardMesh.position.set(bx+Math.sin(br)*0.065,1.55,bz+Math.cos(br)*0.065);boardMesh.rotation.y=br;boardMesh.userData.board=true;scene.add(boardMesh);PICK_TARGETS.push(boardMesh);
   BOARD_POS.set(bx,0,bz);
@@ -621,15 +625,15 @@ function buildFurniture(){
     b(0,0,0.9,0.86,1.8,0.8,c);b(0.39,0,1.38,0.72,0.56,0.04,'#111118');b(0.36,0,1.74,0.8,0.2,0.12,cabLite[i],'glow');
     b(0.55,0,1.0,0.86,0.1,0.34,'#2a2a33');b(0.41,0,0.5,0.6,0.5,0.02,'#1c1c24');b(0.42,0,0.62,0.14,0.08,0.01,'#f2b632','glow');
     b(0.6,-0.18,1.11,0.04,0.12,0.04,'#222228');b(0.6,-0.18,1.19,0.08,0.08,0.08,'#e0442e');b(0.6,0.08,1.06,0.07,0.03,0.07,'#f2b632','glow');b(0.6,0.22,1.06,0.07,0.03,0.07,'#4fd3ff','glow');
-    const canvas=textCanvas(96,64,(g)=>{g.fillStyle='#0b0d1f';g.fillRect(0,0,96,64);}),tex=canvasTex(canvas),[sx,sz]=at(0.415,0);
+    const canvas=textCanvas(96,64,(g)=>{g.fillStyle='#0b0d1f';g.fillRect(0,0,96,64);},3),tex=textTex(canvas),[sx,sz]=at(0.415,0);
     const screen=new THREE.Mesh(new THREE.PlaneGeometry(0.64,0.46),new THREE.MeshBasicMaterial({map:tex}));screen.position.set(sx,1.38,sz);screen.rotation.y=a;scene.add(screen);
     const spot=addSpot({zone:'playroom',x:AC.x+fx*2.6,z:AC.z+fz*2.6,y:0,face:a+Math.PI,pose:'arcade',via:circleVia[i]});
     ARCADES.push({i:ARCADES.length,g:i,face:a+Math.PI,sit:false,x:sx,z:sz,spot,canvas,tex,screen});}
   for(let cx=19;cx<=21;cx++)for(let cz=-27;cz<=-25;cz++)raiseTop(cx,cz,2);// the circle is one solid block; players stand 2.6 m out
   fbox(AC.x,1.05,AC.z,0.5,2.1,0.5,'#2b2d33');fbox(AC.x,2.12,AC.z,0.7,0.06,0.7,'#f2b632','glow');
   // banner: a static five-sided marquee naming each cabinet's game, and above it an eight-sided ARCADE crown that turns
-  const panel=(w,h,pw,ph,draw)=>{const c=textCanvas(w,h,()=>{}),t=canvasTex(c),redraw=()=>{draw(c.getContext('2d'),w,h);t.needsUpdate=true;};redraw();SIGN_DRAWERS.push(redraw);return new THREE.Mesh(new THREE.PlaneGeometry(pw,ph),new THREE.MeshBasicMaterial({map:t,side:THREE.DoubleSide}));};
-  const neon=(g,w,h,txt,col,size)=>{g.fillStyle='#120618';g.fillRect(0,0,w,h);g.fillStyle=col;g.fillRect(0,0,w,3);g.fillRect(0,h-3,w,3);g.textAlign='center';g.font='700 '+size+'px "Pixelify Sans","Courier New",monospace';g.fillStyle=col;g.fillText(txt,w/2,h/2+size*0.36);};
+  const panel=(w,h,pw,ph,draw)=>{const c=textCanvas(w,h,()=>{},2),t=textTex(c),redraw=()=>{draw(c.getContext('2d'),w,h);t.needsUpdate=true;};redraw();SIGN_DRAWERS.push(redraw);return new THREE.Mesh(new THREE.PlaneGeometry(pw,ph),new THREE.MeshBasicMaterial({map:t,side:THREE.DoubleSide}));};
+  const neon=(g,w,h,txt,col,size)=>{g.fillStyle='#120618';g.fillRect(0,0,w,h);g.fillStyle=col;g.fillRect(0,0,w,3);g.fillRect(0,h-3,w,3);g.textAlign='center';g.font='700 '+size+'px '+FONT_UI;g.fillStyle=col;g.fillText(txt,w/2,h/2+size*0.36);};
   ['PADDLE','SNAKE','ORCHARD','BRICKS','RUSH'].forEach((n,i)=>{const a=Math.PI/2+i*Math.PI*2/5,m=panel(128,40,1.15,0.36,(g,w,h)=>neon(g,w,h,n,cabLite[i],20));m.position.set(AC.x+Math.sin(a)*0.92,2.42,AC.z+Math.cos(a)*0.92);m.rotation.y=a;scene.add(m);});
   arcBanner=new THREE.Group();arcBanner.position.set(AC.x,3.0,AC.z);scene.add(arcBanner);
   for(let i=0;i<8;i++){const a=i*Math.PI/4,m=panel(128,48,0.86,0.34,(g,w,h)=>neon(g,w,h,'ARCADE',i%2?'#ff6fae':'#4fd3ff',24));m.position.set(Math.sin(a)*1.03,0,Math.cos(a)*1.03);m.rotation.y=a;arcBanner.add(m);}
@@ -646,7 +650,7 @@ function buildFurniture(){
       const lever=new THREE.Group();lever.position.set(x+0.5,1.2,z+0.05);scene.add(lever);db(lever,0,0.25,0,0.04,0.5,0.04,'#c5ccd2');db(lever,0,0.52,0,0.1,0.1,0.1,'#e0442e');
       db(scene,x,2.17,z-0.05,0.22,0.1,0.22,'#7a5a20');const lamp=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:0xffd34a}));lamp.scale.set(0.24,0.12,0.24);lamp.position.set(x,2.17,z-0.05);lamp.visible=false;scene.add(lamp);
       fbox(x,0.6,zs,0.42,0.06,0.42,'#e0442e');fbox(x,0.3,zs,0.07,0.6,0.07,'#9aa3aa');fbox(x,0.02,zs,0.36,0.04,0.36,'#2b2d33');
-      const canvas=textCanvas(96,72,g=>{g.fillStyle='#120618';g.fillRect(0,0,96,72);}),tex=canvasTex(canvas);
+      const canvas=textCanvas(96,72,g=>{g.fillStyle='#120618';g.fillRect(0,0,96,72);},3),tex=textTex(canvas);
       const screen=new THREE.Mesh(new THREE.PlaneGeometry(0.66,0.5),new THREE.MeshBasicMaterial({map:tex}));screen.position.set(x,1.32,z+0.305);scene.add(screen);
       const spot=addSpot({zone:'playroom',x,z:zs,y:0,face:Math.PI,pose:'arcade',via:via(x)});
       ARCADES.push({i:ARCADES.length,g:5,face:Math.PI,sit:true,seatY:0.63,x,z,spot,canvas,tex,screen,lever,lamp,pull:0,flash:0,spinT:0});});
@@ -733,7 +737,7 @@ function buildFurniture(){
   ln(37,14,43,14);ln(37,27,43,27);ln(37,14,37,27);ln(43,14,43,27);ln(37,18.58,43,18.58);ln(37,22.42,43,22.42);ln(40,14,40,18.58);ln(40,22.42,40,27);
   for(const x of [23.4,32.6])fbox(x,0.55,22.5,0.1,1.1,0.1,'#2b2d33');fbox(28,0.5,22.5,9.2,0.85,0.03,'#20242a','glass');fbox(28,0.95,22.5,9.2,0.06,0.05,'#f4f1ea');solidRect(23,22,33,23,1.0);
   for(const x of [36.4,43.6])fbox(x,0.8,20.5,0.1,1.6,0.1,'#2b2d33');fbox(40,1.2,20.5,7.2,0.7,0.03,'#20242a','glass');fbox(40,1.55,20.5,7.2,0.05,0.05,'#f4f1ea');solidRect(36,20,45,21,1.6);
-  for(const C of COURTS){const fx=Math.sin(C.brot);fbox(C.bx-fx*0.05,2.9,C.net,3.4,1.6,0.08,'#1e2025','noise',C.brot);const canvas=textCanvas(256,112,g=>{g.fillStyle='#16301e';g.fillRect(0,0,256,112);}),tex=canvasTex(canvas);
+  for(const C of COURTS){const fx=Math.sin(C.brot);fbox(C.bx-fx*0.05,2.9,C.net,3.4,1.6,0.08,'#1e2025','noise',C.brot);const canvas=textCanvas(256,112,g=>{g.fillStyle='#16301e';g.fillRect(0,0,256,112);},2),tex=textTex(canvas);
     const m=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1.4),new THREE.MeshBasicMaterial({map:tex}));m.position.set(C.bx,2.9,C.net);m.rotation.y=C.brot;scene.add(m);C.board={canvas,tex};}
   // three-tier stands along the south fence: walk up the steps and sit on the edge of a tier to watch
   const tierCol=['#a9b0b6','#9aa3aa','#b5bcc2'],seatCol=['#2f6fc2','#e0442e','#f2b632'];
@@ -836,10 +840,10 @@ function updateTreeApples(){
 function drawBoard(){
   if(!boardCanvas)return;const g=boardCanvas.getContext('2d');const st=updateTreeApples();
   g.fillStyle='#3a2a1a';g.fillRect(0,0,512,320);g.fillStyle='#4a3522';for(let y=0;y<320;y+=40)g.fillRect(0,y,512,2);
-  g.fillStyle='#f2b632';g.textAlign='center';g.font='700 46px "Pixelify Sans", "Courier New", monospace';g.fillText('ORCHARD BOARD',256,64);
-  g.fillStyle='#f6ecd6';g.font='500 30px "Pixelify Sans", "Courier New", monospace';
+  g.fillStyle='#f2b632';g.textAlign='center';g.font='700 44px '+FONT_UI;g.fillText('ORCHARD BOARD',256,64);
+  g.fillStyle='#f6ecd6';g.font='700 30px '+FONT_UI;
   g.fillText('Golden Apples: '+st.golden,256,134);g.fillText('Apples given today: '+st.given,256,180);
-  g.fillStyle='#c4b49a';g.font='400 24px "Pixelify Sans", "Courier New", monospace';g.fillText(coarse?'Tap to read the board':'Click or press E to read',256,268);
+  g.fillStyle='#c4b49a';g.font='400 24px '+FONT_UI;g.fillText(coarse?'Tap to read the board':'Click or press E to read',256,268);
   boardTex.needsUpdate=true;
 }
 
@@ -965,15 +969,15 @@ const menuBucket=()=>Math.floor(Date.now()/MENU_MS);
 const menuMinsLeft=()=>Math.max(1,Math.ceil((MENU_MS-Date.now()%MENU_MS)/60000));
 function menuFor(b){const R=mulberry32(b*7919+17),out=[];for(const cat of MENU_PLAN){const pool=FOODS.filter(f=>f.cat===cat).map(f=>f.id);for(let k=0;k<2;k++)out.push(pool.splice(Math.floor(R()*pool.length),1)[0]);}return out;}
 const counterGroup=new THREE.Group();scene.add(counterGroup);
-const mbCanvas=textCanvas(640,120,()=>{}),mbTex=canvasTex(mbCanvas);
+const mbCanvas=textCanvas(640,120,()=>{},2),mbTex=textTex(mbCanvas);
 const menuBoard=new THREE.Mesh(new THREE.PlaneGeometry(4.2,0.79),new THREE.MeshBasicMaterial({map:mbTex}));menuBoard.position.set(32.905,1.62,1.25);menuBoard.rotation.y=-Math.PI/2;scene.add(menuBoard);
 function drawMenuBoard(){
-  const g=mbCanvas.getContext('2d'),F='"Pixelify Sans", "Courier New", monospace';menu.mins=menuMinsLeft();
+  const g=mbCanvas.getContext('2d');menu.mins=menuMinsLeft();
   g.fillStyle='#22332a';g.fillRect(0,0,640,120);g.textAlign='left';
-  g.fillStyle='#f6ecd6';g.font='700 22px '+F;g.fillText('FOOD',16,38);g.fillText('COUNTER',16,62);
-  g.fillStyle='#c4b49a';g.font='500 13px '+F;g.fillText('New menu in',16,88);g.fillText(menu.mins+' min',16,104);
+  g.fillStyle='#f6ecd6';g.font='700 22px '+FONT_UI;g.fillText('FOOD',16,38);g.fillText('COUNTER',16,62);
+  g.fillStyle='#c4b49a';g.font='700 14px '+FONT_UI;g.fillText('New menu in',16,88);g.fillText(menu.mins+' min',16,104);
   [['veg','VEG','#7fd36a'],['nonveg','NON-VEG','#ff7d5f'],['fruit','FRUITS','#f2b632'],['drink','DRINKS','#7fc4f0']].forEach(([cat,label,c],i)=>{const x=150+i*122;
-    g.fillStyle=c;g.font='700 15px '+F;g.fillText(label,x,34);g.fillStyle='#f6ecd6';g.font='500 13px '+F;
+    g.fillStyle=c;g.font='700 16px '+FONT_UI;g.fillText(label,x,34);g.fillStyle='#f6ecd6';g.font='400 15px '+FONT_UI;
     menu.items.filter(id=>FOOD[id].cat===cat).forEach((id,k)=>g.fillText(FOOD[id].name,x,60+k*22));});
   mbTex.needsUpdate=true;
 }
@@ -1797,10 +1801,10 @@ $('#cKeep').addEventListener('click',keepFish);$('#cRelease').addEventListener('
    Alone, versus games give you a computer opponent. In a room a second person can join a cabinet in use as Player 2:
    Player 1's browser runs the game and streams it (sendDm 'st'); Player 2 sends their buttons ('in').
    ========================================================= */
-const ARC_W=384,ARC_H=216,ARC_STEP=1/60,AFONT='"Pixelify Sans","Courier New",monospace';
-const arcCanvas=$('#arcCanvas'),arcG=arcCanvas.getContext('2d');
+const ARC_W=384,ARC_H=216,ARC_S=3,ARC_STEP=1/60;// games draw in 384x216 units on a canvas 3x that size, so text is sharp
+const arcCanvas=$('#arcCanvas');arcCanvas.width=ARC_W*ARC_S;arcCanvas.height=ARC_H*ARC_S;const arcG=arcCanvas.getContext('2d');arcG.setTransform(ARC_S,0,0,ARC_S,0,0);arcG.imageSmoothingEnabled=false;
 const AP={p1:'#4fd3ff',p2:'#ff6fae',cpu:'#c4b49a',gold:'#f2b632',red:'#e0442e',green:'#6cbf4c',ink:'#f6ecd6',dim:'#7a7f9a'};
-function atxt(g,s,x,y,size,col,align){g.font='700 '+size+'px '+AFONT;g.textAlign=align||'center';g.fillStyle='#000';g.fillText(s,x+1,y+1);g.fillStyle=col||AP.ink;g.fillText(s,x,y);}
+function atxt(g,s,x,y,size,col,align){g.font='700 '+size+'px '+(size>=14?FONT_PIX:FONT_UI);g.textAlign=align||'center';g.fillStyle='#000';g.fillText(s,x+1,y+1);g.fillStyle=col||AP.ink;g.fillText(s,x,y);}
 const abox=(g,x,y,w,h,c)=>{g.fillStyle=c;g.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h));};
 function abg(g,top,bot){const gr=g.createLinearGradient(0,0,0,ARC_H);gr.addColorStop(0,top);gr.addColorStop(1,bot);g.fillStyle=gr;g.fillRect(0,0,ARC_W,ARC_H);}
 const pcol=(s,i)=>i===0?AP.p1:s.two?AP.p2:AP.cpu;
@@ -1962,7 +1966,7 @@ GAMES.push({id:'slots',name:'Golden Reels',mode:'slots',col:'#f2b632',goal:'Line
       for(let c=0;c<l.k;c++){const x=X0+c*CW,y=Y0+L[c]*CH;abox(g,x,y,CW-2,3,col);abox(g,x,y+CH-3,CW-2,3,col);abox(g,x,y,3,CH,col);abox(g,x+CW-5,y,3,CH,col);}}
     abox(g,0,180,ARC_W,36,'#18110b');
     atxt(g,'CREDITS '+s.cr,12,197,11,AP.ink,'left');atxt(g,'BET '+SLOT_BETS[s.bet]+' × 5 LINES = '+SLOT_BETS[s.bet]*5,192,197,11,AP.gold);atxt(g,'WIN '+Math.floor(s.shown),372,197,11,s.win?'#6cbf4c':AP.ink,'right');
-    atxt(g,s.phase==='spin'?'SPACE  stop the reels':'SPACE  spin  ·  UP/DOWN  bet  ·  play credits, not money',192,211,8,AP.dim);
+    atxt(g,s.phase==='spin'?'SPACE  stop the reels':'SPACE  spin  ·  UP/DOWN  bet  ·  play credits, not money',192,212,10,'#b9a6d6');
     if(s.big&&s.phase==='show'){abox(g,92,80,200,46,'rgba(0,0,0,0.72)');atxt(g,s.big===2?'JACKPOT!':'BIG WIN!',192,112,26,Math.floor(s.flash*6)%2?AP.gold:'#ffffff');}
     for(const o of s.coins){abox(g,o.x-3,o.y-3,7,7,'#f2b632');abox(g,o.x-1,o.y-2,2,4,'#fff8c8');}
     if(s.msgT>0){abox(g,0,160,ARC_W,18,'rgba(0,0,0,0.75)');atxt(g,s.msg,192,173,10,AP.gold);}
@@ -2048,12 +2052,12 @@ function updateArcade(dt){
 function drawCabinetScreens(){
   for(const A of ARCADES){const G=gameOf(A.i),c=A.canvas,g=c.getContext('2d'),o=arcadeOccupants(A.i),blink=Math.floor(arc.clock*2)%2;
     if(G.mode==='slots'){// attract mode, or the reels turning while someone plays
-      g.fillStyle=A.flash>0&&blink?'#5a3a12':'#120618';g.fillRect(0,0,96,72);g.fillStyle='#f2b632';g.fillRect(0,0,96,3);g.fillRect(0,69,96,3);g.textAlign='center';g.font='700 10px '+AFONT;g.fillStyle='#f2b632';g.fillText('GOLDEN REELS',48,15);
+      g.fillStyle=A.flash>0&&blink?'#5a3a12':'#120618';g.fillRect(0,0,96,72);g.fillStyle='#f2b632';g.fillRect(0,0,96,3);g.fillRect(0,69,96,3);g.textAlign='center';g.font='700 10px '+FONT_UI;g.fillStyle='#f2b632';g.fillText('GOLDEN REELS',48,15);
       const spin=A.spinT>0,tick=Math.floor(arc.clock*(spin?14:1.5));for(let r=0;r<3;r++){g.fillStyle='#f6ecd6';g.fillRect(9+r*27,22,24,24);slotSym(g,spin||!o.p1?(tick*3+r*5+A.i)%8:[6,6,6][r],21+r*27,34,2,22,46);}
-      g.font='500 9px '+AFONT;g.fillStyle=A.flash>0?'#ffd34a':'#f6ecd6';g.fillText(o.p1?(A.flash>0?'WIN! ':'')+arcName(o.p1):(blink?'PRESS E':'PLAY CREDITS'),48,62);A.tex.needsUpdate=true;continue;}
+      g.font='500 9px '+FONT_UI;g.fillStyle=A.flash>0?'#ffd34a':'#f6ecd6';g.fillText(o.p1?(A.flash>0?'WIN! ':'')+arcName(o.p1):(blink?'PRESS E':'PLAY CREDITS'),48,62);A.tex.needsUpdate=true;continue;}
     g.fillStyle='#0b0d1f';g.fillRect(0,0,96,64);g.fillStyle=G.col;g.fillRect(0,0,96,3);g.fillRect(0,61,96,3);
-    g.textAlign='center';g.font='700 11px '+AFONT;g.fillStyle=G.col;g.fillText(G.name.toUpperCase(),48,18);
-    g.font='500 9px '+AFONT;g.fillStyle='#f6ecd6';
+    g.textAlign='center';g.font='700 11px '+FONT_UI;g.fillStyle=G.col;g.fillText(G.name.toUpperCase(),48,18);
+    g.font='500 9px '+FONT_UI;g.fillStyle='#f6ecd6';
     if(o.p1){g.fillText('P1 '+arcName(o.p1),48,36);g.fillText('P2 '+(o.p2?arcName(o.p2):'OPEN'),48,50);}
     else{const hi=Store.get('ga_arcade',{})[G.id]||0;g.fillText(blink?'PRESS E':'',48,38);g.fillStyle='#7a7f9a';g.fillText('BEST '+hi,48,52);}
     A.tex.needsUpdate=true;}
@@ -2372,11 +2376,11 @@ function updateCourtViews(dt){
 function drawScoreboard(C,info){
   const F=COURT_FX[C.i],sig=info?info.names.join()+info.sc.join()+info.server+info.phase:'-';if(F.sig===sig||!C.board)return;F.sig=sig;
   const g=C.board.canvas.getContext('2d'),W=256,H=112;g.fillStyle='#16301e';g.fillRect(0,0,W,H);g.fillStyle='#f2b632';g.fillRect(0,0,W,4);g.fillRect(0,H-4,W,4);
-  g.textAlign='center';g.font='700 15px "Pixelify Sans","Courier New",monospace';g.fillStyle='#f2b632';g.fillText(SPORT[C.sport].name.toUpperCase(),W/2,22);
-  if(!info){g.font='500 15px "Pixelify Sans","Courier New",monospace';g.fillStyle='#f6ecd6';g.fillText('Waiting for players',W/2,66);g.fillStyle='#9fc89a';g.font='500 12px "Pixelify Sans","Courier New",monospace';g.fillText('One in each half, then press E',W/2,90);}
-  else{for(const s of [0,1]){const x=s?192:64;g.font='600 14px "Pixelify Sans","Courier New",monospace';g.fillStyle='#f6ecd6';g.fillText((info.server===s&&info.phase!=='over'?'● ':'')+info.names[s],x,44);g.font='700 40px "Pixelify Sans","Courier New",monospace';g.fillStyle=s?'#ff8f6e':'#4fd3ff';g.fillText(String(info.sc[s]),x,88);}
-    g.fillStyle='#f6ecd6';g.font='700 28px "Pixelify Sans","Courier New",monospace';g.fillText('–',W/2,84);
-    if(info.phase==='over'){g.fillStyle='#f2b632';g.font='700 12px "Pixelify Sans","Courier New",monospace';g.fillText(info.w===0||info.w===1?info.names[info.w]+' wins!':'Draw',W/2,104);}}
+  g.textAlign='center';g.font='700 15px '+FONT_UI;g.fillStyle='#f2b632';g.fillText(SPORT[C.sport].name.toUpperCase(),W/2,22);
+  if(!info){g.font='700 16px '+FONT_UI;g.fillStyle='#f6ecd6';g.fillText('Waiting for players',W/2,66);g.fillStyle='#9fc89a';g.font='400 13px '+FONT_UI;g.fillText('One in each half, then press E',W/2,90);}
+  else{for(const s of [0,1]){const x=s?192:64;g.font='700 15px '+FONT_UI;g.fillStyle='#f6ecd6';g.fillText((info.server===s&&info.phase!=='over'?'● ':'')+info.names[s],x,44);g.font='700 40px '+FONT_PIX;g.fillStyle=s?'#ff8f6e':'#4fd3ff';g.fillText(String(info.sc[s]),x,88);}
+    g.fillStyle='#f6ecd6';g.font='700 28px '+FONT_PIX;g.fillText('–',W/2,84);
+    if(info.phase==='over'){g.fillStyle='#f2b632';g.font='700 13px '+FONT_UI;g.fillText(info.w===0||info.w===1?info.names[info.w]+' wins!':'Draw',W/2,104);}}
   C.board.tex.needsUpdate=true;
 }
 // the HUD scoreboard: shown while you stand in a court half (waiting) or play
@@ -3362,6 +3366,6 @@ resize();drawBoard();showLogin();renderRoomBtn();
 // an invite link (?room=CODE) joins straight away; the host's own link reopens the room
 (function(){if(typeof URLSearchParams==='undefined'||!location.search)return;const code=normCode(new URLSearchParams(location.search).get('room'));if(!validCode(code))return;
   roomCodeIn.value=code;const own=Store.get('ga_hosted',[]).find(r=>r.code===code);if(own)hostRoom(code,own.name,false);else joinRoom(code,roomEmail('ga_joined',code));})();
-if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load('600 34px "Pixelify Sans"'),document.fonts.load('700 46px "Pixelify Sans"')]).then(()=>{SIGN_DRAWERS.forEach(f=>f());drawBoard();}).catch(()=>{});}
+if(document.fonts&&document.fonts.load){Promise.all(['700 34px "Pixelify Sans"','700 16px "Atkinson Hyperlegible"','400 16px "Atkinson Hyperlegible"'].map(f=>document.fonts.load(f))).then(()=>{SIGN_DRAWERS.forEach(f=>f());drawBoard();drawCabinetScreens();}).catch(()=>{});}// redraw canvas text once both fonts are in
 requestAnimationFrame(frame);
 })();
