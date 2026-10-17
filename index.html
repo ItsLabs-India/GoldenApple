@@ -26,6 +26,32 @@
         </div>
         <p class="lede">Walk the office as your own block avatar, poke coworkers, and hand out apples for good work.</p>
 
+        <div id="roomStep" class="room-step">
+          <div id="roomRecent" class="room-recent" hidden></div>
+          <form id="joinForm" class="room-form" novalidate>
+            <label for="roomCode">Join a room</label>
+            <div class="room-row">
+              <input id="roomCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="Invite code, like K7X2MQ">
+              <button class="btn btn-gold" type="submit">Join</button>
+            </div>
+          </form>
+          <form id="hostForm" class="room-form" novalidate>
+            <label for="roomName">Or create a room</label>
+            <div class="room-row">
+              <input id="roomName" type="text" maxlength="28" autocomplete="off" placeholder="Room name, like Design team">
+              <button class="btn" type="submit">Create</button>
+            </div>
+          </form>
+          <p class="err" id="roomErr" role="alert"></p>
+          <p class="fine">Rooms are for people on the same Wi-Fi. Whoever creates the room keeps this tab open while others play.</p>
+          <button class="btn btn-ghost" id="soloBtn" type="button">Play on this browser only</button>
+        </div>
+
+        <div id="roomBar" class="room-bar" hidden>
+          <span id="roomBarText"></span>
+          <button class="btn sm" id="roomLeave" type="button">Leave</button>
+        </div>
+
         <div id="returning" class="returning" hidden>
           <img id="retHead" class="head lg" alt="">
           <div style="min-width:0">
@@ -46,7 +72,7 @@
             <p class="err" id="emailErr" role="alert"></p>
           </div>
           <button class="btn btn-gold wide" type="submit">Continue</button>
-          <p class="fine">No password. One profile per email. Your profile is remembered in this browser with a cookie.</p>
+          <p class="fine">No password. One profile per email.</p>
         </form>
 
         <ul class="rules">
@@ -151,6 +177,7 @@
           <button class="btn sm" id="bEdit" type="button">Profile</button>
           <button class="btn sm" id="bMenu" type="button">Menu</button>
           <button class="btn sm" id="bSound" type="button" aria-pressed="true">Sound</button>
+          <button class="btn sm btn-gold" id="bRoom" type="button" hidden>Room</button>
         </div>
       </div>
 
@@ -207,6 +234,9 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- rooms: PeerJS for the joining handshake, qrcodejs for invite QR codes (the game still runs if these fail to load) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

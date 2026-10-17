@@ -5,7 +5,7 @@
   "description": "Block-style 3D office world for workplace recognition: pokes, daily apples and Golden Apple status.",
   "scripts": {
     "start": "npx --yes serve -l 5500 .",
-    "test": "node tests/smoke-test.js"
+    "test": "node tests/smoke-test.js && node tests/room-test.js"
   },
   "engines": {
     "node": ">=18"

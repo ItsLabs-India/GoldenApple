@@ -113,6 +113,27 @@ input::placeholder,textarea::placeholder{color:var(--dim)}
 .returning .ret-name{font-family:var(--f-display);font-size:22px;font-weight:600;line-height:1.1}
 .returning .ret-mail{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .returning .ret-actions{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+/* rooms: start-screen step, room bar, invite modal */
+.room-step{display:grid;gap:14px}
+.room-form{display:grid;gap:6px}
+.room-form>label{font-family:var(--f-display);font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.room-row{display:flex;gap:8px}
+.room-row input{flex:1;min-width:0}
+#roomCode{font-family:var(--f-num);font-size:22px;letter-spacing:.12em;text-transform:uppercase;padding-block:6px}
+#roomCode::placeholder{font-family:var(--f-body);font-size:15px;letter-spacing:0;text-transform:none}
+.room-recent{display:grid;gap:6px}
+.room-recent .btn{justify-content:flex-start;text-align:left;gap:8px}
+.room-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bark-lo);border:2px solid var(--gold-deep);font-size:14px}
+.code-chip{display:inline-block;font-family:var(--f-num);font-size:17px;letter-spacing:.1em;padding:0 6px;background:var(--bark-2);border:2px solid var(--bark-hi);color:var(--gold);vertical-align:1px}
+.invite{display:grid;gap:10px;padding:14px;background:var(--bark-lo);border:2px solid var(--gold-deep)}
+.invite-code{font-family:var(--f-num);font-size:52px;line-height:1;letter-spacing:.14em;color:var(--gold)}
+.invite-row{display:flex;gap:8px}
+.invite-row input{flex:1;min-width:0;font-size:14px}
+.qr:not(:empty){justify-self:start;padding:8px;background:#f6ecd6;line-height:0}
+.qr img,.qr canvas{display:block;image-rendering:pixelated}
+.online{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.online li{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bark-lo);font-size:14px}
+.online .head{width:24px;height:24px}
 .rules{list-style:none;margin:0;padding:12px 0 0;border-top:2px dashed var(--bark-hi);display:grid;gap:8px;font-size:14px;color:var(--muted)}
 .rules li{display:flex;align-items:center;gap:10px}
 .rules img{width:22px;height:20px;image-rendering:pixelated;flex:none}
@@ -251,6 +272,10 @@ legend{padding:0 0 4px;font-family:var(--f-display);font-size:15px;font-weight:6
 @media (max-width:640px){
   .brand h1{font-size:36px}
   .login-card{margin-inline:auto;padding:20px 16px}
+  .invite-code{font-size:40px}
+  .room-row,.invite-row{flex-wrap:wrap}
+  .room-row input,.invite-row input{flex-basis:100%}
+  .room-row .btn,.invite-row .btn{flex:1}
   #screen-login{background:rgba(17,11,7,.45)}
   .hud-tl{width:calc(100% - 32px - 112px)}
   .hud-tr{width:104px}

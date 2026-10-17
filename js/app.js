@@ -25,6 +25,7 @@
      Minimap
      Recognition logic ................ giveApples, doPoke, Golden Apple
      UI rendering ..................... HUD, card, modals, toasts
+     Rooms ............................ peer-to-peer rooms on the same Wi-Fi
      Login, setup, session
      Main loop
    ========================================================================= */
@@ -129,7 +130,10 @@ const deskOf=rec=>arrToDesk(deskToArr(Object.assign({},DESK_DEFAULT,rec&&rec.des
    Data model
    ========================================================= */
 let USERS=Store.get('ga_users',{});
-const saveUsers=()=>Store.set('ga_users',USERS);
+// room state (see the Rooms section). In a room, USERS and WORLD hold the room's data instead of this browser's own.
+const room={mode:null,code:null,name:'',status:'off',peer:null,hostConn:null,conns:new Set(),online:new Set(),data:null,email:'',everJoined:false,awaitLogin:false,retry:null,timer:null,sendT:0,keepAlive:0,lastSent:'',waveN:0};
+const kOf=u=>u?(u.key||u.email):null;// profiles are keyed by email on this browser, by a private key in a room
+function saveUsers(){if(room.mode==='host'){room.data.users=USERS;saveRoomData();}else if(!room.mode)Store.set('ga_users',USERS);}
 const profileCookieName=email=>'ga_p_'+hashStr(email).toString(36);
 function writeProfileCookie(rec){
   const compact={e:rec.email,n:rec.name,r:rec.role,t:rec.team,s:rec.status,a:avatarToArr(rec.avatar),rc:rec.received||0,c:rec.createdAt,k:deskToArr(deskOf(rec)),ds:rec.deskSlot==null?-1:rec.deskSlot};
@@ -138,6 +142,7 @@ function writeProfileCookie(rec){
 function readProfileCookie(email){const v=Cookies.get(profileCookieName(email));if(!v)return null;const j=b64d(v);if(!j)return null;try{const o=JSON.parse(j);return o&&o.e===email?o:null;}catch(e){return null;}}
 function recordFromCookie(c){return{email:c.e,name:c.n,role:c.r||'',team:c.t||'',status:c.s||'available',avatar:arrToAvatar(c.a),received:c.rc||0,createdAt:c.c||Date.now(),given:null,recent:[],inbox:[],desk:arrToDesk(c.k),deskSlot:c.ds==null?-1:c.ds};}
 function findUser(email){
+  if(room.mode){const k=findKeyByEmail(email);return k?USERS[k]:null;}
   if(USERS[email])return USERS[email];
   const c=readProfileCookie(email);
   if(c){const rec=recordFromCookie(c);USERS[email]=rec;saveUsers();return rec;}
@@ -167,10 +172,10 @@ function purgeDemo(){
   return{v:2,feed:feed.filter(f=>byName.has(f.to)&&(!f.from||byName.has(f.from))&&(f.kind!=='golden'||isGolden(byName.get(f.to).received)))};
 }
 let WORLD=Store.get('ga_world',null);if(!WORLD||WORLD.v!==2)WORLD=purgeDemo();
-const saveWorld=()=>Store.set('ga_world',WORLD);
+function saveWorld(){if(room.mode==='host'){room.data.feed=WORLD.feed;saveRoomData();}else if(!room.mode)Store.set('ga_world',WORLD);}
 saveWorld();
 
-const state={mode:'login',me:null,player:null,chars:new Map(),selected:null,pokeMsg:0,cookieOK:Cookies.ok,modal:null,setup:null,hintHidden:Store.get('ga_hint_hidden',false)};
+const state={solo:false,mode:'login',me:null,player:null,chars:new Map(),selected:null,pokeMsg:0,cookieOK:Cookies.ok,modal:null,setup:null,hintHidden:Store.get('ga_hint_hidden',false)};
 
 /* =========================================================
    Three.js core
@@ -431,17 +436,17 @@ function animateDesk(d,t,dt){if(reduceMotion)return;for(const a of d.anim){
   else if(a.k==='spin')a.o.rotation.y+=dt*0.4;}}
 function placeDesk(slot,cfg,owner){
   const S=DESK_SLOTS[slot];if(!S)return;clearDesk(slot);
-  const d=buildDesk(cfg);d.root.position.set(S.x,0,S.dz);d.root.rotation.y=S.tw<0?Math.PI:0;scene.add(d.root);S.desk=d;S.spot.owner=owner;
+  const d=buildDesk(cfg);d.root.position.set(S.x,0,S.dz);d.root.rotation.y=S.tw<0?Math.PI:0;scene.add(d.root);S.desk=d;S.spot.owner=owner;S.sig=owner+'|'+deskToArr(deskOf({desk:cfg})).join();
   solidRect(S.x-1,S.dz-0.5,S.x+1,S.dz+0.5,0.82);raiseTop(Math.floor(S.x),Math.floor(S.zc),0.95);
 }
 function clearDesk(slot){
-  const S=DESK_SLOTS[slot];if(!S||!S.desk)return;scene.remove(S.desk.root);S.desk=null;S.spot.owner=null;
+  const S=DESK_SLOTS[slot];if(!S||!S.desk)return;scene.remove(S.desk.root);S.desk=null;S.spot.owner=null;S.sig='';
   for(let cx=Math.floor(S.x-1);cx<Math.ceil(S.x+1);cx++)for(let cz=Math.floor(S.dz-0.5);cz<Math.ceil(S.dz+0.5);cz++)setTop(cx,cz,0);
   setTop(Math.floor(S.x),Math.floor(S.zc),0);
 }
 // one desk per person: keep a valid slot nobody else holds, otherwise take the free slot nearest the door (-1 when all are taken)
 function allocDesk(rec){
-  const taken=new Set(Object.values(USERS).filter(u=>u.email!==rec.email).map(u=>u.deskSlot));
+  const taken=new Set(Object.values(USERS).filter(u=>kOf(u)!==kOf(rec)).map(u=>u.deskSlot));
   if(!(rec.deskSlot>=0&&rec.deskSlot<DESK_SLOTS.length&&!taken.has(rec.deskSlot))){const s=DESK_ORDER.find(i=>!taken.has(i));rec.deskSlot=s==null?-1:s;}
   return rec.deskSlot;
 }
@@ -858,7 +863,7 @@ class Character{
   faceTo(x,z){this.heading=Math.atan2(x-this.root.position.x,z-this.root.position.z);}
   update(dt){
     const a=this.anim,A=this.av;a.t+=dt;
-    if(this.kind!=='me'){if(this.hopV!==0||this.hopY>0){this.hopV-=22*dt;this.hopY+=this.hopV*dt;if(this.hopY<=0){this.hopY=0;this.hopV=0;}}this.root.position.y=this.baseY+this.hopY;a.air=this.hopY>0.02;}
+    if(this.kind!=='me'){if(this.hopV!==0||this.hopY>0){this.hopV-=22*dt;this.hopY+=this.hopV*dt;if(this.hopY<=0){this.hopY=0;this.hopV=0;}}this.root.position.y=this.baseY+this.hopY;a.air=this.hopY>0.02||!!this.netAir;}
     this.root.rotation.y=angleLerp(this.root.rotation.y,this.heading,1-Math.exp(-dt*12));
     const moving=a.speed>0.1&&!a.air;
     a.phase+=dt*(2+a.speed*2.5);
@@ -1107,9 +1112,9 @@ function updatePlayer(dt){
 function blocked(x,z,y){const r=0.28;for(const o of [[-r,-r],[r,-r],[-r,r],[r,r]]){if(cellTop(x+o[0],z+o[1])>y+0.55)return true;}return false;}
 function supportY(x,z){const r=0.2;let m=-99;for(const o of [[-r,-r],[r,-r],[-r,r],[r,r],[0,0]])m=Math.max(m,cellTop(x+o[0],z+o[1]));return m;}
 // desk seats belong to one person: only the owner can sit there, and a slot without a desk has no chair
-const myEmail=()=>state.me?state.me.email:null;
-function nearestSeat(){const p=state.player.root.position;let best=null,bd=1.9;for(const s of SPOTS){if(s.pose!=='sit'||s.occ||(s.desk&&s.owner!==myEmail()))continue;const d=Math.hypot(s.x-p.x,s.z-p.z);if(d<bd){bd=d;best=s;}}return best;}
-function nearestOtherDesk(){const p=state.player.root.position;let best=null,bd=1.9;for(const S of DESK_SLOTS){const s=S.spot;if(!S.desk||s.owner===myEmail())continue;const d=Math.hypot(s.x-p.x,s.z-p.z);if(d<bd){bd=d;best=s;}}return best;}
+const myKey=()=>kOf(state.me);
+function nearestSeat(){const p=state.player.root.position;let best=null,bd=1.9;for(const s of SPOTS){if(s.pose!=='sit'||s.occ||(s.desk&&s.owner!==myKey()))continue;const d=Math.hypot(s.x-p.x,s.z-p.z);if(d<bd){bd=d;best=s;}}return best;}
+function nearestOtherDesk(){const p=state.player.root.position;let best=null,bd=1.9;for(const S of DESK_SLOTS){const s=S.spot;if(!S.desk||s.owner===myKey())continue;const d=Math.hypot(s.x-p.x,s.z-p.z);if(d<bd){bd=d;best=s;}}return best;}
 const deskOwnerName=s=>{const u=s&&USERS[s.owner];return u?u.name.split(' ')[0]:'someone';};
 function sitOn(s){const P=state.player;s.occ='me';P.seat=s;placeAt(P,s);P.vy=0;P.onGround=true;P.say(s.desk?'My desk!':'Comfy.',1200);sfx('sit');if(P.held&&!P.eating)startEat();}
 function standUp(){const P=state.player,s=P.seat;if(!s)return;s.occ=null;P.seat=null;const a=s.approach||{x:s.x,z:s.z+1};P.root.position.set(a.x,0,a.z);P.baseY=0;P.anim.pose='stand';P.root.visible=true;sfx('stand');}
@@ -1157,7 +1162,7 @@ function handlePick(cx,cy){
   if(o.userData.board){openBoard();return;}
   const ch=o.userData.char;if(!ch)return;
   const now=performance.now();
-  if(lastClick.id===ch.id&&now-lastClick.t<400){lastClick={id:null,t:0};if(ch!==state.player)doPoke(state.player,ch,POKES[state.pokeMsg]);else{ch.anim.wave=1.2;}}
+  if(lastClick.id===ch.id&&now-lastClick.t<400){lastClick={id:null,t:0};if(ch!==state.player)doPoke(state.player,ch,POKES[state.pokeMsg]);else{ch.anim.wave=1.2;room.waveN++;}}
   else{lastClick={id:ch.id,t:now};openCard(ch);}
 }
 
@@ -1235,26 +1240,40 @@ function zoneAt(x,z){
 /* =========================================================
    Recognition logic: apples, pokes, Golden Apple
    ========================================================= */
-function persistData(ch){
-  USERS[ch.data.email]=ch.data;saveUsers();if(ch.kind==='me')state.cookieOK=writeProfileCookie(ch.data);
-}
+function persistRec(rec){USERS[kOf(rec)]=rec;saveUsers();if(!room.mode&&rec===state.me)state.cookieOK=writeProfileCookie(rec);}
+function persistData(ch){persistRec(ch.data);}
 function pushFeed(item){WORLD.feed.unshift(item);WORLD.feed=WORLD.feed.slice(0,40);saveWorld();renderFeed();}
-function pushInbox(ch,item){ch.data.inbox=[Object.assign({at:Date.now(),read:false},item),...(ch.data.inbox||[])].slice(0,50);}
+function pushInbox(rec,item){rec.inbox=[Object.assign({at:Date.now(),read:false},item),...(rec.inbox||[])].slice(0,50);}
 function giveApples(from,to,count,reason,note){
-  const left=budgetLeft(from.data);if(count<1||count>left||from===to)return false;
-  spendBudget(from.data,count);
-  const before=to.data.received||0;to.data.received=before+count;
-  const became=!isGolden(before)&&isGolden(to.data.received);if(became)to.data.goldenAt=Date.now();
-  to.data.recent=[{from:from.data.name,count,reason,note:note||'',at:Date.now()},...(to.data.recent||[])].slice(0,6);
-  pushInbox(to,{type:'apple',from:from.data.name,fromId:from.id,count,reason,note:note||''});
-  persistData(from);persistData(to);
-  pushFeed({kind:'apple',from:from.data.name,to:to.data.name,count,reason,at:Date.now()});
-  if(became)pushFeed({kind:'golden',to:to.data.name,at:Date.now()+1});
-  animateGift(from,to,count,became);
-  drawBoard();renderMe();
-  if(state.selected===to||state.selected===from)renderCard();
-  if(state.modal==='board')openBoard();
+  if(!from||!to||from===to)return false;
+  if(room.mode==='guest'){// the host checks and applies it; spend locally so the card updates straight away
+    if(from!==state.player||count<1||count>budgetLeft(from.data))return false;
+    if(!roomSend({t:'give',to:kOf(to.data),count,reason,note:note||''})){toast('Not connected to the room right now. Try again in a moment.','',2600);return false;}
+    spendBudget(from.data,count);renderMe();return{became:false,pending:true};}
+  const r=applyGift(from.data,to.data,count,reason,note);if(r)afterGift(from.data,to.data,count,reason,note,r.became);return r;
+}
+// the rules and the data change: run by this browser when playing alone, or by the room host
+function applyGift(fd,td,count,reason,note){
+  if(!fd||!td||fd===td||count<1||count>budgetLeft(fd))return false;
+  spendBudget(fd,count);
+  const before=td.received||0;td.received=before+count;
+  const became=!isGolden(before)&&isGolden(td.received);if(became)td.goldenAt=Date.now();
+  td.recent=[{from:fd.name,count,reason,note:note||'',at:Date.now()},...(td.recent||[])].slice(0,6);
+  pushInbox(td,{type:'apple',from:fd.name,fromKey:kOf(fd),count,reason,note:note||''});
+  persistRec(fd);persistRec(td);
+  pushFeed({kind:'apple',from:fd.name,to:td.name,count,reason,at:Date.now()});
+  if(became)pushFeed({kind:'golden',to:td.name,at:Date.now()+1});
   return{became};
+}
+// what everyone sees: flying apples, toasts, board and HUD. The host also tells the room.
+function afterGift(fd,td,count,reason,note,became){
+  const from=charOfKey(kOf(fd)),to=charOfKey(kOf(td));
+  if(state.mode==='world'&&from&&to)animateGift(from,to,count,became);
+  if(td===state.me&&fd!==state.me)toast('<b>'+esc(fd.name)+'</b> gave you '+plural(count,'apple')+' · '+esc(reason),'',4200,ICON_APPLE);
+  drawBoard();renderMe();renderFeed();
+  if(state.selected&&(state.selected===to||state.selected===from))renderCard();
+  if(state.modal==='board')openBoard();
+  if(room.mode==='host'){broadcast({t:'gift',from:kOf(fd),to:kOf(td),count,reason,note:note||'',became,recs:[pubRec(fd),pubRec(td)],feed:WORLD.feed});sendTo(kOf(fd),{t:'me',rec:fd});sendTo(kOf(td),{t:'me',rec:td});}
 }
 function animateGift(from,to,count,became){
   const vis=from.root.visible&&to.root.visible&&from.root.position.distanceTo(to.root.position)<48;
@@ -1279,22 +1298,29 @@ function animateGift(from,to,count,became){
 }
 function growCrown(ch){let t=0;const step=()=>{t+=0.05;ch.crown.scale.setScalar(Math.min(1,0.01+t*t*1.8));if(t<0.75)requestAnimationFrame(step);else ch.crown.scale.setScalar(1);};step();}
 const pokeCooldown=new Map();
-function doPoke(from,to,msg){
+// net: undefined for your own poke; true for a poke the host told us about; on the host, the guest connection it came from
+function doPoke(from,to,msg,net){
   if(!from||!to||from===to)return;
-  const key=from.id+'>'+to.id,now=performance.now();if(now-(pokeCooldown.get(key)||0)<2500){if(from===state.player)toast('Give '+esc(to.data.name.split(' ')[0])+' a second before poking again.','',1800);return;}
-  pokeCooldown.set(key,now);
+  if(!net){const key=from.id+'>'+to.id,now=performance.now();if(now-(pokeCooldown.get(key)||0)<2500){if(from===state.player)toast('Give '+esc(to.data.name.split(' ')[0])+' a second before poking again.','',1800);return;}
+    pokeCooldown.set(key,now);
+    if(room.mode==='guest'&&!roomSend({t:'poke',to:kOf(to.data),msg})){toast('Not connected to the room right now. Try again in a moment.','',2600);return;}}
   if(from===state.player&&!from.seat)from.faceTo(to.root.position.x,to.root.position.z);
   from.anim.poke=0.45;sfx('poke');
   const arrive=()=>{
     const p=to.root.position;ringWave(p.x,p.y,p.z,0x6fb7e8);const hp=headPos(to);burst(hp.x,hp.y,hp.z,10,['#6fb7e8','#d7eefc','#ffffff'],2,0.08);
     to.anim.startle=0.8;to.hop(4.2);sfx(to===state.player?'poked':'boop');to.say('!',700,'alert');
     setTimeout(()=>to.say(from.data.name.split(' ')[0]+': '+msg,3000),650);
-    if(to.kind==='local'){pushInbox(to,{type:'poke',from:from.data.name,fromId:from.id,msg});persistData(to);}
-    else if(to===state.player){pushInbox(to,{type:'poke',from:from.data.name,fromId:from.id,msg});persistData(to);renderMe();toast('<b>'+esc(from.data.name)+'</b> poked you: '+esc(msg),'',3600,ICON_POKE);}
+    if(to===state.player){renderMe();toast('<b>'+esc(from.data.name)+'</b> poked you: '+esc(msg),'',3600,ICON_POKE);}
   };
   const vis=from.root.visible&&to.root.visible&&from.root.position.distanceTo(to.root.position)<48;
   if(!vis){arrive();}else{const o=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:0x6fb7e8}));o.scale.setScalar(0.16);const d=from.root.position.distanceTo(to.root.position);fly(o,()=>handPos(from),()=>headPos(to),clamp(0.35+d*0.03,0.4,0.9),0.6+d*0.04,()=>{o.material.dispose();arrive();},'#6fb7e8');}
-  if(from===state.player)toast('You poked <b>'+esc(to.data.name)+'</b>: '+esc(msg),'',2200,ICON_POKE);
+  if(from===state.player&&!net)toast('You poked <b>'+esc(to.data.name)+'</b>: '+esc(msg),'',2200,ICON_POKE);
+  if(room.mode!=='guest')pokeData(from.data,to.data,msg,net&&net!==true?net:null);
+}
+// the poke lands in the inbox (solo browser or room host); the host tells the room and the person poked
+function pokeData(fd,td,msg,origin){
+  pushInbox(td,{type:'poke',from:fd.name,fromKey:kOf(fd),msg});persistRec(td);if(td===state.me)renderMe();
+  if(room.mode==='host'){broadcast({t:'poke',from:kOf(fd),to:kOf(td),msg},origin);sendTo(kOf(td),{t:'me',rec:td});}
 }
 /* =========================================================
    UI rendering
@@ -1334,7 +1360,7 @@ function openCard(ch){
 function closeCard(){const s=state.selected;state.selected=null;if(s)s.refresh();card.hidden=true;$('#hud').classList.remove('card-open');}
 function renderCard(){
   const ch=state.selected;if(!ch)return;const d=ch.data,self=ch===state.player,n=d.received||0,left=state.me?budgetLeft(state.me):0;
-  const kindChip=ch.kind==='local'?'<span class="chip">Away · same browser</span>':'<span class="chip">This is you</span>';
+  const kindChip=ch.kind==='remote'?'<span class="chip">Online now</span>':ch.kind==='local'?'<span class="chip">'+(room.mode?'Away · offline':'Away · same browser')+'</span>':'<span class="chip">This is you</span>';
   const recent=(d.recent||[]).slice(0,3);
   let h='<div class="card-head"><img class="head xl" src="'+ch.headUrl+'" alt=""><div style="min-width:0"><div class="card-name">'+esc(d.name)+'</div><div class="card-role">'+esc([d.role,d.team].filter(Boolean).join(' · ')||'No role set')+'</div><div class="chips">'+statusChip(d,ch.kind)+(ch.golden?'<span class="gold-chip"><img src="'+ICON_GOLD+'" alt="">Golden Apple</span>':'')+kindChip+'</div></div></div>';
   h+='<div class="fine" id="cardZone">'+(ch.hiddenInStall?'In the Restroom':'At '+esc(zoneAt(ch.root.position.x,ch.root.position.z)))+'</div>';
@@ -1357,7 +1383,7 @@ function renderCard(){
   h+='<div class="recent"><h3>Recent apples</h3>'+(recent.length?'<ol>'+recent.map(r=>'<li><b>'+esc(r.from)+'</b> · '+plural(r.count,'apple')+' · '+esc(r.reason)+(r.note?'<q>'+esc(r.note)+'</q>':'')+'<div class="meta">'+timeAgo(r.at)+'</div></li>').join('')+'</ol>':'<p class="empty">No apples yet. Be the first.</p>')+'</div>';
   cardBody.innerHTML=h;
   const on=(id,fn)=>{const el=$('#'+id,cardBody);if(el)el.addEventListener('click',fn);};
-  on('cEdit',()=>openSetup('edit'));on('cWave',()=>{state.player.anim.wave=1.4;});
+  on('cEdit',()=>openSetup('edit'));on('cWave',()=>{state.player.anim.wave=1.4;room.waveN++;});
   on('cGive',()=>{giveState.open=!giveState.open;renderCard();if(giveState.open){const f=$('[data-reason]',cardBody);if(f)f.focus();}});
   on('cPoke',()=>doPoke(state.player,ch,POKES[state.pokeMsg]));
   cardBody.querySelectorAll('[data-poke]').forEach(b=>b.addEventListener('click',()=>{state.pokeMsg=+b.dataset.poke;cardBody.querySelectorAll('[data-poke]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));}));
@@ -1373,7 +1399,7 @@ function renderCard(){
     if(!res){$('#gErr',cardBody).textContent='You don’t have enough apples left today.';return;}
     giveState.open=false;giveState.reason=null;giveState.count=1;giveState.note='';
     toast('You gave <b>'+esc(d.name)+'</b> '+plural(c,'apple')+' · '+esc(r),'',2800,ICON_APPLE);
-    if(ch.kind==='local')toast(esc(d.name.split(' ')[0])+' will see this in their inbox next time they log in on this browser.','',3600);
+    if(ch.kind==='local')toast(esc(d.name.split(' ')[0])+(room.mode?' will see this in their inbox next time they join the room.':' will see this in their inbox next time they log in on this browser.'),'',3600);
     renderCard();
   });
 }
@@ -1394,13 +1420,14 @@ function openBoard(){
     +'<section style="display:grid;gap:10px"><h3>Recent apples</h3><ol class="list">'+items.map(f=>f.kind==='golden'?'<li style="border-left-color:var(--gold)"><b>'+esc(f.to)+'</b> became a Golden Apple<div class="meta">'+timeAgo(f.at)+'</div></li>':'<li><b>'+esc(f.from)+'</b> gave <b>'+esc(f.to)+'</b> '+plural(f.count,'apple')+' · '+esc(f.reason)+'<div class="meta">'+timeAgo(f.at)+'</div></li>').join('')+'</ol></section>'
     +'<section style="display:grid;gap:6px"><h3>How it works</h3><p class="fine">Everyone can give up to '+DAILY_APPLES+' apples a day. Pick a reason and add a note so the thanks is specific. The red apples on the plaza tree are today’s gifts; the gold ones are Golden Apple members.</p></section>');
 }
+const pokeTarget=it=>it.fromKey!=null?charOfKey(it.fromKey):state.chars.get(it.fromId);
 function openInbox(){
   const me=state.me;const items=me.inbox||[];
   showModal('inbox','<h2 id="modalTitle">Inbox</h2>'+(items.length?'<ol class="list">'+items.map((it,i)=>it.type==='apple'
     ?'<li><b>'+esc(it.from)+'</b> gave you '+plural(it.count,'apple')+' · '+esc(it.reason)+(it.note?'<q>'+esc(it.note)+'</q>':'')+'<div class="meta">'+timeAgo(it.at)+(it.read?'':' · new')+'</div></li>'
-    :'<li class="poke"><b>'+esc(it.from)+'</b> poked you: '+esc(it.msg)+'<div class="meta">'+timeAgo(it.at)+(it.read?'':' · new')+'</div>'+(state.chars.get(it.fromId)?'<button class="btn sm" style="margin-top:6px" data-pokeback="'+i+'" type="button">Poke back</button>':'')+'</li>').join('')+'</ol>':'<p class="empty">Nothing yet. Apples and pokes you receive will show up here.</p>'));
-  modalBody.querySelectorAll('[data-pokeback]').forEach(b=>b.addEventListener('click',()=>{const it=items[+b.dataset.pokeback];const t=state.chars.get(it.fromId);if(t){closeModal();doPoke(state.player,t,POKES[state.pokeMsg]);}}));
-  items.forEach(i=>i.read=true);persistData(state.player);renderMe();
+    :'<li class="poke"><b>'+esc(it.from)+'</b> poked you: '+esc(it.msg)+'<div class="meta">'+timeAgo(it.at)+(it.read?'':' · new')+'</div>'+(pokeTarget(it)?'<button class="btn sm" style="margin-top:6px" data-pokeback="'+i+'" type="button">Poke back</button>':'')+'</li>').join('')+'</ol>':'<p class="empty">Nothing yet. Apples and pokes you receive will show up here.</p>'));
+  modalBody.querySelectorAll('[data-pokeback]').forEach(b=>b.addEventListener('click',()=>{const it=items[+b.dataset.pokeback];const t=pokeTarget(it);if(t){closeModal();doPoke(state.player,t,POKES[state.pokeMsg]);}}));
+  items.forEach(i=>i.read=true);persistData(state.player);if(room.mode==='guest')roomSend({t:'read'});renderMe();
 }
 function openMenu(confirmDelete){
   const me=state.me;
@@ -1413,22 +1440,26 @@ function openMenu(confirmDelete){
       +'<label class="check"><input type="checkbox" id="mMute"'+(SND.muted?' checked':'')+'> Mute everything <span class="key">M</span></label>'
       +'<p class="fine">The music and background sounds change with where you are. Everything is generated in your browser, so there are no files to download.</p>'
       :'<p class="fine">This browser can’t play sound.</p>')+'</div>'
-    +'<div style="display:grid;gap:6px"><span class="lbl">Where your profile is saved</span>'
+    +(room.mode?'<div style="display:grid;gap:6px"><span class="lbl">Room</span><div style="font-size:15px">'+esc(room.name)+' <span class="code-chip">'+esc(room.code)+'</span></div><p class="fine">'+(room.mode==='host'?'You host this room, so everyone’s profiles and apples are saved in this browser. Keep this tab open while people play.':'Your profile and apples are saved by the host of this room.')+'</p><div class="menu-actions"><button class="btn" id="mRoom" type="button">Invite &amp; room details</button></div></div>':'')
+    +(room.mode?'':'<div style="display:grid;gap:6px"><span class="lbl">Where your profile is saved</span>'
     +'<div class="storage-row"><span>Cookie</span><span class="'+(state.cookieOK?'ok':'bad')+'">'+(state.cookieOK?'Saved':'Blocked by browser')+'</span></div>'
     +'<div class="storage-row"><span>Local storage</span><span class="'+(Store.ok?'ok':'bad')+'">'+(Store.ok?'Saved':'Blocked by browser')+'</span></div>'
-    +'<p class="fine">'+(state.cookieOK?'Next time you open this page on this browser, you’ll be logged straight back in.':Store.ok?'This browser blocks cookies in embedded pages, so your profile is kept in local storage instead. You’ll still be remembered here.':'This browser blocks both, so your profile lasts only until you close the page.')+'</p></div>'
+    +'<p class="fine">'+(state.cookieOK?'Next time you open this page on this browser, you’ll be logged straight back in.':Store.ok?'This browser blocks cookies in embedded pages, so your profile is kept in local storage instead. You’ll still be remembered here.':'This browser blocks both, so your profile lasts only until you close the page.')+'</p></div>')
     +'<div class="menu-actions"><button class="btn" id="mEdit" type="button">Edit profile, avatar &amp; desk</button><button class="btn" id="mLogout" type="button">Log out</button></div>'
-    +(confirmDelete?'<div style="display:grid;gap:8px;padding:12px;border:2px solid var(--apple)"><p style="margin:0">Delete your profile, apples and inbox from this browser? This can’t be undone.</p><div class="menu-actions"><button class="btn btn-apple" id="mDelYes" type="button">Yes, delete my profile</button><button class="btn" id="mDelNo" type="button">Keep it</button></div></div>':'<button class="btn btn-ghost" id="mDel" type="button" style="justify-self:start">Delete my profile</button>'));
+    +(confirmDelete?'<div style="display:grid;gap:8px;padding:12px;border:2px solid var(--apple)"><p style="margin:0">Delete your profile, apples and inbox from '+(room.mode?'this room':'this browser')+'? This can’t be undone.</p><div class="menu-actions"><button class="btn btn-apple" id="mDelYes" type="button">Yes, delete my profile</button><button class="btn" id="mDelNo" type="button">Keep it</button></div></div>':'<button class="btn btn-ghost" id="mDel" type="button" style="justify-self:start">Delete my profile</button>'));
   const on=(id,fn)=>{const el=$('#'+id,modalBody);if(el)el.addEventListener('click',fn);};
-  on('mEdit',()=>{closeModal();openSetup('edit');});on('mLogout',logout);
+  on('mEdit',()=>{closeModal();openSetup('edit');});on('mLogout',logout);on('mRoom',openRoomModal);
   on('mDel',()=>openMenu(true));on('mDelNo',()=>openMenu(false));
   const mMus=$('#mMusic',modalBody),mFx=$('#mSfx',modalBody),mMu=$('#mMute',modalBody);
   if(mMus)mMus.addEventListener('input',()=>{SND.music=mMus.value/100;saveSound();});
   if(mFx){mFx.addEventListener('input',()=>{SND.sfx=mFx.value/100;saveSound();});mFx.addEventListener('change',()=>sfx('catch'));}
   if(mMu)mMu.addEventListener('change',()=>{SND.muted=mMu.checked;audioInit();saveSound();});
-  on('mDelYes',()=>{const email=me.email;if(me.deskSlot>=0)clearDesk(me.deskSlot);delete USERS[email];saveUsers();Cookies.del(profileCookieName(email));Cookies.del('ga_session');Store.del('ga_last');closeModal();leaveWorld();toast('Your profile was deleted from this browser.','',3200);});
+  on('mDelYes',()=>{const k=kOf(me),email=me.email;if(room.mode==='guest')roomSend({t:'delete'});deleteUser(k);
+    if(!room.mode){Cookies.del(profileCookieName(email));Cookies.del('ga_session');Store.del('ga_last');}
+    else{rememberRoom(room.mode==='host'?'ga_hosted':'ga_joined',{code:room.code,name:room.name,email:''});room.email='';}
+    closeModal();leaveWorld();toast('Your profile was deleted from '+(room.mode?'this room.':'this browser.'),'',3200);});
 }
-$('#bBoard').addEventListener('click',openBoard);$('#bInbox').addEventListener('click',openInbox);$('#bEdit').addEventListener('click',()=>openSetup('edit'));$('#bMenu').addEventListener('click',()=>openMenu(false));
+$('#bBoard').addEventListener('click',openBoard);$('#bInbox').addEventListener('click',openInbox);$('#bEdit').addEventListener('click',()=>openSetup('edit'));$('#bMenu').addEventListener('click',()=>openMenu(false));$('#bRoom').addEventListener('click',openRoomModal);
 function renderSoundBtn(){const b=$('#bSound');b.setAttribute('aria-pressed',String(!SND.muted));b.title=SND.muted?'Sound is off (M)':'Sound is on (M)';}
 $('#bSound').addEventListener('click',toggleMute);renderSoundBtn();
 
@@ -1439,17 +1470,296 @@ $('#hintClose').addEventListener('click',()=>{$('#hint').hidden=true;state.hintH
 if(coarse){$('#hint').innerHTML='<span>Joystick to walk</span><span>Tap a coworker</span><span>Double-tap to poke</span><span>Drag to look</span><button class="x" id="hintClose2" type="button" aria-label="Hide controls">×</button>';$('#hintClose2').addEventListener('click',()=>{$('#hint').hidden=true;state.hintHidden=true;Store.set('ga_hint_hidden',true);});}
 
 /* =========================================================
+   Rooms: peer-to-peer over the same Wi-Fi
+   The host's tab is the room. It keeps every profile, the feed and the rules, and relays live positions.
+   Guests connect straight to the host with WebRTC; PeerJS only does the joining handshake. No STUN or TURN
+   servers are configured, so only devices on the same network can connect.
+   ========================================================= */
+const PROTO=1,ROOM_PREFIX='golden-apple-room-',CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',PEER_OPTS={debug:0,config:{iceServers:[]}};
+const newRoomCode=()=>Array.from({length:6},()=>CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
+const normCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const validCode=c=>c.length===6&&[...c].every(ch=>CODE_CHARS.includes(ch));
+const roomPeerId=code=>ROOM_PREFIX+code.toLowerCase();
+const inviteLink=()=>location.origin+location.pathname+'?room='+room.code;
+// what other people may see of a profile: no email, inbox or daily budget
+const pubRec=u=>({key:u.key,name:u.name,role:u.role,team:u.team,status:u.status,avatar:u.avatar,desk:u.desk,deskSlot:u.deskSlot,received:u.received,recent:u.recent,goldenAt:u.goldenAt,createdAt:u.createdAt});
+const pubUsers=()=>{const o={};for(const k in USERS)o[k]=pubRec(USERS[k]);return o;};
+const charOfKey=k=>k!=null&&k===myKey()?state.player:state.chars.get('local:'+k);
+const str=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
+function saveRoomData(){if(room.mode==='host'&&room.data)Store.set('ga_room_'+room.code,room.data);}
+function rememberRoom(list,entry){const old=Store.get(list,[]).find(x=>x.code===entry.code)||{};const a=Store.get(list,[]).filter(x=>x.code!==entry.code);a.unshift(Object.assign(old,entry));Store.set(list,a.slice(0,6));}
+const roomEmail=(list,code)=>(Store.get(list,[]).find(x=>x.code===code)||{}).email||'';
+function useSoloData(){USERS=Store.get('ga_users',{});WORLD=Store.get('ga_world',null)||{v:2,feed:[]};}
+function roomSend(m){const c=room.hostConn;if(c&&c.open){try{c.send(m);return true;}catch(e){}}return false;}
+function broadcast(m,except){for(const c of room.conns)if(c!==except&&c.conn.open){try{c.conn.send(m);}catch(e){}}}
+function sendTo(k,m){for(const c of room.conns)if(c.key===k&&c.conn.open){try{c.conn.send(m);}catch(e){}}}
+function setRoomStatus(s){
+  const was=room.status;room.status=s;
+  if(state.mode==='world'&&was!==s){if(s==='reconnecting')toast(room.mode==='host'?'Lost the internet handshake service. People already here stay connected; new people can join once it’s back.':'Lost the connection to the room. Reconnecting…','',4200);else if(s==='live'&&was==='reconnecting')toast('Back in the room.','',2200);}
+  renderRoomBtn();if(state.mode==='login')showLogin();if(state.modal==='room')openRoomModal();
+}
+function roomError(msg){$('#roomErr').textContent=msg;if(state.mode==='login')showLogin();}
+function leaveRoom(){
+  clearTimeout(room.retry);clearTimeout(room.timer);const p=room.peer;room.peer=null;room.hostConn=null;
+  for(const c of room.conns){try{c.conn.close();}catch(e){}}room.conns.clear();if(p){try{p.destroy();}catch(e){}}
+  Object.assign(room,{mode:null,code:null,name:'',status:'off',data:null,email:'',everJoined:false,awaitLogin:false,online:new Set(),lastSent:''});
+  useSoloData();renderRoomBtn();
+}
+/* ---------- host ---------- */
+function hostRoom(code,name,fresh){
+  $('#roomErr').textContent='';
+  if(!window.Peer){roomError('Rooms need the internet to start. Check your connection and reload the page.');return;}
+  leaveRoom();state.solo=false;
+  room.mode='host';room.code=code;room.data=Store.get('ga_room_'+code,null)||{v:1,code,name,createdAt:Date.now(),users:{},feed:[]};
+  room.name=room.data.name;USERS=room.data.users;WORLD={v:2,feed:room.data.feed||[]};
+  setRoomStatus('connecting');
+  const p=new window.Peer(roomPeerId(code),PEER_OPTS);room.peer=p;
+  p.on('open',()=>{if(room.peer!==p)return;saveRoomData();rememberRoom('ga_hosted',{code,name:room.name});setRoomStatus('live');});
+  p.on('connection',conn=>{if(room.peer===p)hostAccept(conn);});
+  p.on('disconnected',()=>{if(room.peer!==p||p.destroyed)return;setRoomStatus('reconnecting');setTimeout(()=>{if(room.peer===p&&!p.destroyed&&p.disconnected)p.reconnect();},3000);});
+  p.on('error',err=>{if(room.peer!==p)return;const t=err&&err.type;
+    if(t==='unavailable-id'){if(fresh)hostRoom(newRoomCode(),name,true);else{leaveRoom();roomError('That room is already open in another tab or on another computer.');}return;}
+    if(t==='browser-incompatible'){leaveRoom();roomError('This browser can’t host rooms. Try a recent Chrome, Edge, Firefox or Safari.');return;}
+    if(room.status==='connecting'&&(t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed')){leaveRoom();roomError('Couldn’t start the room. Rooms need the internet for a moment to start; check your connection.');}});
+}
+function hostAccept(conn){
+  const c={conn,key:null};
+  conn.on('open',()=>room.conns.add(c));
+  conn.on('data',m=>{try{hostOnMsg(c,m);}catch(e){console.error(e);}});
+  const drop=()=>{if(!room.conns.delete(c))return;if(c.key)setOnline(c.key,[...room.conns].some(o=>o.key===c.key));};
+  conn.on('close',drop);conn.on('error',drop);
+}
+function setOnline(k,on){
+  const was=room.online.has(k);if(on)room.online.add(k);else room.online.delete(k);if(was===on)return;
+  if(room.mode==='host')broadcast({t:'presence',k,on});
+  onPresence(k,on);
+}
+function onPresence(k,on){
+  const u=USERS[k];
+  if(state.mode==='world'){syncPeople();if(u&&k!==myKey())toast('<b>'+esc(u.name)+'</b> '+(on?'joined the room.':'left the room.'),'',2400);}
+  renderRoomBtn();if(state.modal==='room')openRoomModal();
+}
+function cleanProfile(p){return{name:str(p.name,24).replace(/\s+/g,' '),role:str(p.role,32),team:str(p.team,24),status:STATUS[p.status]&&p.status!=='away'?p.status:'available',avatar:arrToAvatar(avatarToArr(p.avatar||{})),desk:deskOf({desk:p.desk})};}
+function findKeyByEmail(email){for(const k in USERS)if(USERS[k].email===email)return k;return null;}
+function newUserKey(email){let k='p'+hashStr(email).toString(36);while(USERS[k])k+='x';return k;}
+function hostBind(c,k,created){c.key=k;c.conn.send({t:'login',ok:true,rec:USERS[k],created:!!created});setOnline(k,true);}
+function hostOnMsg(c,m){
+  if(!m||typeof m!=='object')return;
+  switch(m.t){
+    case 'hello':if(m.v!==PROTO){c.conn.send({t:'bye',why:'version'});return;}
+      c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[...room.online]});return;
+    case 'login':{const email=str(m.email,120).toLowerCase();if(!EMAIL_RE.test(email))return;const k=findKeyByEmail(email);
+      if(k)hostBind(c,k);else c.conn.send({t:'login',ok:false,email});return;}
+    case 'create':{const email=str(m.email,120).toLowerCase(),p=cleanProfile(m.profile||{});
+      if(!EMAIL_RE.test(email)||p.name.length<2){c.conn.send({t:'err',msg:'That profile couldn’t be created.'});return;}
+      if(findKeyByEmail(email)){c.conn.send({t:'login',ok:false,exists:true,email});return;}
+      const rec=Object.assign({key:newUserKey(email),email},p,{deskSlot:-1,received:0,createdAt:Date.now(),given:null,recent:[],inbox:[]});
+      allocDesk(rec);USERS[rec.key]=rec;saveUsers();broadcast({t:'user',rec:pubRec(rec)});onUserChanged(rec.key);
+      hostBind(c,rec.key,true);return;}
+    case 'logout':if(c.key){const k=c.key;c.key=null;setOnline(k,[...room.conns].some(o=>o.key===k));}return;
+  }
+  const k=c.key,me=k?USERS[k]:null;if(!me)return;// everything below needs a signed-in guest
+  switch(m.t){
+    case 'st':if(m.s&&typeof m.s==='object'){broadcast({t:'st',k,s:m.s},c);applyNetState(k,m.s);}return;
+    case 'update':{const p=cleanProfile(m.profile||{});if(p.name.length<2)return;Object.assign(me,p);allocDesk(me);saveUsers();broadcast({t:'user',rec:pubRec(me)});sendTo(k,{t:'me',rec:me});onUserChanged(k);return;}
+    case 'give':{const td=USERS[m.to],count=m.count|0,reason=REASONS.includes(m.reason)?m.reason:null,note=str(m.note,120);
+      const r=td&&reason?applyGift(me,td,count,reason,note):false;
+      if(r)afterGift(me,td,count,reason,note,r.became);else{c.conn.send({t:'err',msg:'Those apples couldn’t be sent.'});c.conn.send({t:'me',rec:me});}return;}
+    case 'poke':{const td=USERS[m.to];if(!td||!POKES.includes(m.msg)||td===me)return;const f=charOfKey(k),t=charOfKey(m.to);
+      if(state.mode==='world'&&f&&t)doPoke(f,t,m.msg,c);else pokeData(me,td,m.msg,c);return;}
+    case 'read':(me.inbox||[]).forEach(i=>i.read=true);saveUsers();return;
+    case 'delete':c.key=null;deleteUser(k);setOnline(k,false);return;
+  }
+}
+/* ---------- guest ---------- */
+function joinRoom(code,email){
+  $('#roomErr').textContent='';
+  if(!window.Peer){roomError('Rooms need the internet to connect. Check your connection and reload the page.');return;}
+  leaveRoom();state.solo=false;
+  room.mode='guest';room.code=code;room.email=email||'';USERS={};WORLD={v:2,feed:[]};
+  setRoomStatus('connecting');
+  const p=new window.Peer(PEER_OPTS);room.peer=p;
+  p.on('open',()=>{if(room.peer===p)connectHost();});
+  p.on('disconnected',()=>{if(room.peer===p&&!p.destroyed)setTimeout(()=>{if(room.peer===p&&!p.destroyed&&p.disconnected)p.reconnect();},3000);});
+  p.on('error',err=>{if(room.peer!==p)return;const t=err&&err.type;
+    if(t==='peer-unavailable'){room.hostConn=null;if(room.everJoined)guestLost();else{leaveRoom();roomError('No room with code '+code+' is open right now. Check the code, and ask the host to open the room.');}return;}
+    if(t==='browser-incompatible'){leaveRoom();roomError('This browser can’t join rooms. Try a recent Chrome, Edge, Firefox or Safari.');return;}
+    if(!room.everJoined&&(t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed')){leaveRoom();roomError('Couldn’t connect. Joining needs the internet for a moment; check your connection.');}});
+}
+function connectHost(){
+  const p=room.peer;if(!p||p.destroyed)return;clearTimeout(room.timer);
+  const c=p.connect(roomPeerId(room.code),{reliable:true,serialization:'json'});room.hostConn=c;
+  room.timer=setTimeout(()=>{if(room.hostConn!==c||c.open)return;room.hostConn=null;try{c.close();}catch(e){}
+    if(room.everJoined)guestLost();else{leaveRoom();roomError('Couldn’t reach the room. Make sure you’re on the same Wi-Fi as the host.');}},15000);
+  c.on('open',()=>{if(room.hostConn!==c)return;clearTimeout(room.timer);c.send({t:'hello',v:PROTO});});
+  c.on('data',m=>{if(room.hostConn===c){try{guestOnMsg(m);}catch(e){console.error(e);}}});
+  const lost=()=>{if(room.hostConn!==c)return;room.hostConn=null;guestLost();};c.on('close',lost);c.on('error',lost);
+}
+function guestLost(){
+  if(room.mode!=='guest')return;room.awaitLogin=false;setRoomStatus('reconnecting');
+  clearTimeout(room.retry);room.retry=setTimeout(()=>{if(room.mode==='guest'&&!room.hostConn)connectHost();},4000);
+}
+function mergeRec(r){if(!r||!r.key)return null;const cur=USERS[r.key];if(cur)Object.assign(cur,r);else USERS[r.key]=r;return USERS[r.key];}
+function guestLogin(email){room.email=email;room.awaitLogin=true;if(!roomSend({t:'login',email}))room.awaitLogin=false;if(state.mode==='login')showLogin();}
+function guestOnMsg(m){
+  if(!m||typeof m!=='object')return;
+  switch(m.t){
+    case 'welcome':{
+      room.name=str(m.room&&m.room.name,28)||'Room';const mine=state.me;USERS=m.users||{};if(mine)USERS[kOf(mine)]=Object.assign(mine,USERS[kOf(mine)]||{});
+      WORLD={v:2,feed:Array.isArray(m.feed)?m.feed:[]};room.online=new Set(m.online||[]);room.everJoined=true;
+      rememberRoom('ga_joined',{code:room.code,name:room.name});setRoomStatus('live');
+      if(state.mode==='world'&&mine){guestLogin(mine.email);syncDesks();syncPeople();renderFeed();drawBoard();}
+      else if(room.email)guestLogin(room.email);
+      return;}
+    case 'login':{
+      room.awaitLogin=false;
+      if(!m.ok){if(m.exists){if(state.mode==='setup')$('#setupErr').textContent='A profile with this email already exists in this room. Go back and sign in with it.';else toast('A profile with this email already exists in this room.','',3200);}
+        else if(state.mode!=='world'){room.email='';openSetup('create',m.email);}return;}
+      const rec=mergeRec(m.rec);if(!rec)return;room.email=rec.email;startSession(rec);
+      if(state.mode==='world'&&state.me===rec){renderMe();return;}
+      state.setup=null;enterWorld(rec);
+      if(m.created){toast('Welcome to <b>'+esc(room.name)+'</b>, '+esc(rec.name)+'. You have '+DAILY_APPLES+' apples to give today.','',4200,ICON_APPLE);
+        if(rec.deskSlot>=0)setTimeout(()=>toast('Your desk is ready in the Work Desks room: <b>'+esc(deskLabel(rec))+'</b>. It’s the gold square on your map.','',5200),1400);}
+      else toast('Welcome back to <b>'+esc(room.name)+'</b>, '+esc(rec.name)+'.','',3200);
+      return;}
+    case 'user':{const r=mergeRec(m.rec);if(r)onUserChanged(r.key);return;}
+    case 'me':{mergeRec(m.rec);renderMe();if(state.selected)renderCard();return;}
+    case 'gone':{const k=m.k;if(k===myKey()){deleteUser(k);leaveWorld();toast('Your profile was removed from this room.','',3200);}else deleteUser(k);return;}
+    case 'presence':{if(m.on)room.online.add(m.k);else room.online.delete(m.k);onPresence(m.k,!!m.on);return;}
+    case 'st':applyNetState(m.k,m.s);return;
+    case 'gift':{(m.recs||[]).forEach(mergeRec);if(Array.isArray(m.feed))WORLD.feed=m.feed;const fd=USERS[m.from],td=USERS[m.to];if(fd&&td)afterGift(fd,td,m.count|0,str(m.reason,40),str(m.note,120),!!m.became);return;}
+    case 'poke':{const f=charOfKey(m.from),t=charOfKey(m.to);if(state.mode==='world'&&f&&t&&POKES.includes(m.msg))doPoke(f,t,m.msg,true);return;}
+    case 'err':toast(esc(str(m.msg,140)||'Something went wrong.'),'',3000);return;
+    case 'bye':{const why=m.why;if(state.mode!=='login')leaveWorld();leaveRoom();roomError(why==='version'?'This room runs a different version of Golden Apple. Reload the page and try again.':'The room was closed.');return;}
+  }
+}
+/* ---------- shared: people, desks and live movement ---------- */
+function deleteUser(k){
+  const u=USERS[k];if(!u)return;if(u.deskSlot>=0)clearDesk(u.deskSlot);delete USERS[k];saveUsers();
+  if(room.mode==='host'){broadcast({t:'gone',k});sendTo(k,{t:'gone',k});}
+  if(state.mode==='world'&&k!==myKey())syncPeople();
+}
+function onUserChanged(k){
+  if(state.mode==='world'){syncDesks();syncPeople();if(k===myKey())renderMe();}
+  if(state.selected&&kOf(state.selected.data)===k)renderCard();
+  drawBoard();if(state.modal==='room')openRoomModal();
+}
+function syncDesks(){
+  const want=new Map();for(const k in USERS){const u=USERS[k];if(u.deskSlot>=0&&u.deskSlot<DESK_SLOTS.length)want.set(u.deskSlot,{k,cfg:deskOf(u)});}
+  DESK_SLOTS.forEach((S,i)=>{const w=want.get(i),sig=w?w.k+'|'+deskToArr(w.cfg).join():'';if(S.sig===sig)return;if(w)placeDesk(i,w.cfg,w.k);else clearDesk(i);});
+}
+function removeLocal(ch){ch.dispose();state.chars.delete(ch.id);if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;const i=locals.indexOf(ch);if(i>=0)locals.splice(i,1);if(state.selected===ch)closeCard();}
+// offline people sit Away at their own desk (or a free bench when they have none)
+function seatAway(ch){
+  if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=null;
+  const D=DESK_SLOTS[ch.data.deskSlot],s=D?D.spot:SPOTS.find(b=>!b.desk&&b.pose==='sit'&&!b.occ);
+  if(!s){ch.root.position.set(SPAWN.x,0,SPAWN.z-4);return;}s.occ=ch.id;ch.spot=s;placeAt(ch,s);
+}
+// keeps one character per other profile: 'remote' while they are online in the room, 'local' (Away) otherwise
+function syncPeople(){
+  const mk=myKey();
+  for(const ch of locals.slice()){const k=ch.id.slice(6);if(!USERS[k]||k===mk)removeLocal(ch);}
+  for(const k in USERS){
+    if(k===mk)continue;const u=USERS[k],kind=room.online.has(k)?'remote':'local';let ch=state.chars.get('local:'+k);
+    if(!ch){ch=new Character({id:'local:'+k,kind,data:u});ch.avSig=avatarToArr(u.avatar).join();state.chars.set(ch.id,ch);locals.push(ch);
+      if(kind==='local')seatAway(ch);else ch.root.position.set(SPAWN.x,0,SPAWN.z);continue;}
+    ch.data=u;const sig=avatarToArr(u.avatar).join();if(sig!==ch.avSig){ch.avSig=sig;ch.setAvatar(u.avatar);}
+    if(kind!==ch.kind){ch.kind=kind;if(kind==='local'){ch.net=null;ch.netAir=false;ch.dropHeld();ch.anim.eat=null;seatAway(ch);}}
+    else if(kind==='local'){const D=DESK_SLOTS[u.deskSlot];if(D&&ch.spot!==D.spot)seatAway(ch);}
+    ch.refresh();
+  }
+}
+function applyNetState(k,s){if(k===myKey()||!s||typeof s!=='object')return;const ch=state.chars.get('local:'+k);if(ch&&ch.kind==='remote')ch.net=s;}
+// remote players glide towards their last reported position; seats, held food, eating and waves are mirrored
+function stepRemote(ch,dt){
+  const n=ch.net,p=ch.root.position,seat=n.seat?SPOTS.find(s=>s.id===n.seat):null;
+  if(seat){if(ch.spot!==seat){if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=seat;if(!seat.occ)seat.occ=ch.id;placeAt(ch,seat);}ch.anim.speed=0;}
+  else{
+    if(ch.spot){if(ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=null;ch.anim.pose='stand';ch.root.visible=true;ch.hiddenInStall=false;}
+    const x=+n.x||0,z=+n.z||0,dx=x-p.x,dz=z-p.z;if(Math.hypot(dx,dz)>8){p.x=x;p.z=z;}else{const f=1-Math.exp(-dt*10);p.x+=dx*f;p.z+=dz*f;}
+    ch.baseY=+n.y||0;ch.heading=+n.h||0;ch.anim.speed=clamp(+n.spd||0,0,8);ch.anim.run=!!n.run;ch.netAir=!!n.air;
+  }
+  const held=FOOD[n.held]?n.held:null;if(held!==(ch.held||null)){if(held)ch.hold(held);else ch.dropHeld();}
+  ch.anim.eat=n.eat==='eat'||n.eat==='drink'?n.eat:null;
+  if(n.wave!==ch.netWave){if(ch.netWave!=null)ch.anim.wave=1.4;ch.netWave=n.wave;}
+}
+function myNetState(){const P=state.player,p=P.root.position,r=v=>Math.round(v*100)/100;
+  return{x:r(p.x),y:r(p.y),z:r(p.z),h:r(P.heading),spd:r(P.anim.speed),run:!!P.anim.run,air:!P.onGround,seat:P.seat?P.seat.id:null,held:P.held||null,eat:P.anim.eat||null,wave:room.waveN};}
+function updateRoom(dt){
+  if(!room.mode||state.mode!=='world'||!state.player)return;
+  room.sendT-=dt;room.keepAlive-=dt;
+  if(room.sendT<=0){room.sendT=0.12;const s=myNetState(),j=JSON.stringify(s);
+    if(j!==room.lastSent||room.keepAlive<=0){room.lastSent=j;room.keepAlive=2;if(room.mode==='host')broadcast({t:'st',k:myKey(),s});else roomSend({t:'st',s});}}
+  for(const ch of locals)if(ch.kind==='remote'&&ch.net)stepRemote(ch,dt);
+}
+addEventListener('beforeunload',e=>{if(room.mode==='host'&&room.online.size>1){e.preventDefault();e.returnValue='';}});
+/* ---------- room UI: start-screen bar, HUD button, invite modal ---------- */
+function renderRecentRooms(){
+  const el=$('#roomRecent'),hosted=Store.get('ga_hosted',[]),joined=Store.get('ga_joined',[]).filter(j=>!hosted.some(h=>h.code===j.code));
+  el.hidden=!hosted.length&&!joined.length;
+  el.innerHTML=hosted.map(r=>'<button class="btn" type="button" data-reopen="'+esc(r.code)+'">Reopen <b>'+esc(r.name)+'</b> <span class="code-chip">'+esc(r.code)+'</span></button>').join('')
+    +joined.map(r=>'<button class="btn" type="button" data-rejoin="'+esc(r.code)+'">Rejoin <b>'+esc(r.name||r.code)+'</b> <span class="code-chip">'+esc(r.code)+'</span></button>').join('');
+  el.querySelectorAll('[data-reopen]').forEach(b=>b.addEventListener('click',()=>{const r=hosted.find(x=>x.code===b.dataset.reopen);if(r)hostRoom(r.code,r.name,false);}));
+  el.querySelectorAll('[data-rejoin]').forEach(b=>b.addEventListener('click',()=>joinRoom(b.dataset.rejoin,roomEmail('ga_joined',b.dataset.rejoin))));
+}
+function renderRoomBar(){
+  const t=$('#roomBarText'),b=$('#roomLeave'),code='<span class="code-chip">'+esc(room.code||'')+'</span>',nm='<b>'+esc(room.name||'')+'</b>';
+  if(!room.mode){t.innerHTML='Playing on <b>this browser only</b>';b.textContent='Use a room';return;}
+  b.textContent='Leave';const s=room.status;
+  if(room.mode==='host')t.innerHTML=s==='connecting'?'Opening your room…':s==='reconnecting'?'Hosting '+nm+' '+code+' · reconnecting…':'You’re hosting '+nm+' '+code;
+  else t.innerHTML=s==='connecting'?'Connecting to room '+code+'…':s==='reconnecting'?'Lost the host. Reconnecting to '+code+'…':room.awaitLogin?'Signing you in to '+nm+'…':'Room '+nm+' '+code;
+}
+function renderRoomBtn(){const b=$('#bRoom');if(!b)return;b.hidden=!room.mode;if(room.mode)b.textContent=room.status==='live'?'Room · '+room.online.size+' online':'Room · reconnecting';}
+function openRoomModal(){
+  if(!room.mode)return;const link=inviteLink(),host=room.mode==='host';
+  const online=[...room.online].map(k=>USERS[k]).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+  showModal('room','<h2 id="modalTitle">Room: '+esc(room.name)+'</h2>'
+    +'<div class="invite"><span class="lbl">Invite code</span><div class="invite-code">'+esc(room.code.slice(0,3))+' '+esc(room.code.slice(3))+'</div>'
+    +'<div class="invite-row"><input id="rLink" type="text" readonly value="'+esc(link)+'" aria-label="Invite link"><button class="btn btn-gold" id="rCopy" type="button">Copy link</button></div>'
+    +'<div id="rQR" class="qr" aria-label="QR code for the invite link"></div>'
+    +'<p class="fine">People on the same Wi-Fi open the link (or type the code on the start screen), make a profile and walk in.'+(host?' <b>You are the host:</b> keep this tab open, or the room pauses until you reopen it.':'')+'</p></div>'
+    +'<section style="display:grid;gap:8px"><h3>Online now ('+online.length+')</h3>'+(online.length?'<ul class="online">'+online.map(u=>'<li><img class="head" src="'+(charOfKey(u.key)?charOfKey(u.key).headUrl:'')+'" alt="">'+esc(u.name)+(u.key===myKey()?' <span class="chip">You</span>':'')+'</li>').join('')+'</ul>':'<p class="empty">Nobody yet.</p>')+'</section>'
+    +(host?'<section style="display:grid;gap:8px"><h3>Backup</h3><p class="fine">The room lives in this browser. Download a backup now and then, or to move the room to another computer.</p><div class="menu-actions"><button class="btn" id="rExport" type="button">Download backup</button><label class="btn" for="rImport">Restore from file</label><input id="rImport" type="file" accept="application/json,.json" hidden></div></section>':'')
+    +'<div class="menu-actions"><button class="btn btn-ghost" id="rLeave" type="button">Leave room</button></div>');
+  if(window.QRCode){try{new window.QRCode($('#rQR',modalBody),{text:link,width:168,height:168,colorDark:'#18110b',colorLight:'#f6ecd6'});}catch(e){}}
+  const on=(id,ev,fn)=>{const el=$('#'+id,modalBody);if(el)el.addEventListener(ev,fn);};
+  on('rCopy','click',()=>{const inp=$('#rLink',modalBody);const done=()=>toast('Invite link copied.','',1800);
+    if(typeof navigator!=='undefined'&&navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(link).then(done,()=>{inp.select();});else{inp.focus();inp.select();try{document.execCommand('copy');done();}catch(e){}}});
+  on('rExport','click',()=>{const blob=new Blob([JSON.stringify(room.data,null,1)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='golden-apple-room-'+room.code+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});
+  on('rImport','change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d||typeof d.users!=='object')throw 0;restoreRoom(d);}catch(err){toast('That file isn’t a Golden Apple room backup.','',3000);}};rd.readAsText(f);});
+  on('rLeave','click',()=>{closeModal();if(state.mode==='world')leaveWorld();leaveRoom();showLogin();toast('You left the room.','',2200);});
+}
+function restoreRoom(d){
+  room.data={v:1,code:room.code,name:str(d.name,28)||room.name,createdAt:d.createdAt||Date.now(),users:d.users,feed:Array.isArray(d.feed)?d.feed:[]};
+  room.name=room.data.name;const email=state.me&&state.me.email;if(state.mode==='world')leaveWorld();
+  USERS=room.data.users;WORLD={v:2,feed:room.data.feed};saveRoomData();
+  for(const c of room.conns){c.key=null;c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[]});}
+  room.online=new Set();closeModal();const rec=email&&findUser(email);if(rec)enterWorld(rec);else showLogin();toast('Room restored from the backup.','',3000);
+}
+
+/* =========================================================
    Login, setup, session
    ========================================================= */
 const loginForm=$('#loginForm'),emailIn=$('#email'),emailErr=$('#emailErr');
 const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-function returningUser(){const email=Cookies.get('ga_session')||Store.get('ga_last',null);return email?findUser(email):null;}
+function returningUser(){
+  if(room.mode==='guest')return null;
+  const email=room.mode==='host'?roomEmail('ga_hosted',room.code):(Cookies.get('ga_session')||Store.get('ga_last',null));
+  return email?findUser(email):null;
+}
+// step 1: join or create a room (or play on this browser only); step 2: sign in with an email
 function showLogin(){
   state.mode='login';applyViewOffset();
   $('#screen-login').hidden=false;$('#screen-setup').hidden=true;$('#hud').hidden=true;
-  const rec=returningUser();const ret=$('#returning');
-  if(rec){ret.hidden=false;$('#retName').textContent=rec.name;$('#retMail').textContent=rec.email;$('#retHead').src=headIcon(paintSkin(rec.avatar),56);loginForm.hidden=true;}
-  else{ret.hidden=true;loginForm.hidden=false;}
+  const ret=$('#returning'),pick=!room.mode&&!state.solo;
+  $('#roomStep').hidden=!pick;$('#roomBar').hidden=pick;ret.hidden=true;loginForm.hidden=true;
+  if(pick){renderRecentRooms();return;}
+  renderRoomBar();
+  const ready=!room.mode||room.status==='live'||(room.mode==='host'&&room.status==='reconnecting');
+  if(!ready||room.awaitLogin)return;
+  const rec=returningUser();
+  if(rec){ret.hidden=false;$('#retName').textContent=rec.name;$('#retMail').textContent=rec.email;$('#retHead').src=headIcon(paintSkin(rec.avatar),56);}
+  else loginForm.hidden=false;
 }
 $('#retEnter').addEventListener('click',()=>{const rec=returningUser();if(rec){startSession(rec);enterWorld(rec);}});
 $('#retSwitch').addEventListener('click',()=>{$('#returning').hidden=true;loginForm.hidden=false;emailIn.value='';emailIn.focus();});
@@ -1457,12 +1767,26 @@ loginForm.addEventListener('submit',e=>{
   e.preventDefault();const email=emailIn.value.trim().toLowerCase();
   if(!EMAIL_RE.test(email)){emailErr.textContent='Enter a valid email, like name@company.com.';emailIn.focus();return;}
   emailErr.textContent='';
+  if(room.mode==='guest'){guestLogin(email);return;}// only the host knows whether this email has a profile
   const rec=findUser(email);
   if(rec){startSession(rec);enterWorld(rec);toast('Welcome back, <b>'+esc(rec.name)+'</b>. This email already has a profile, so we logged you in.','',3600);}
   else openSetup('create',email);
 });
 emailIn.addEventListener('input',()=>{emailErr.textContent='';});
-function startSession(rec){const a=Cookies.set('ga_session',rec.email,30);const b=writeProfileCookie(rec);state.cookieOK=a&&b;Store.set('ga_last',rec.email);}
+function startSession(rec){
+  if(room.mode){rememberRoom(room.mode==='host'?'ga_hosted':'ga_joined',{code:room.code,name:room.name,email:rec.email});return;}
+  const a=Cookies.set('ga_session',rec.email,30);const b=writeProfileCookie(rec);state.cookieOK=a&&b;Store.set('ga_last',rec.email);
+}
+const roomCodeIn=$('#roomCode'),roomNameIn=$('#roomName');
+$('#joinForm').addEventListener('submit',e=>{e.preventDefault();const code=normCode(roomCodeIn.value);
+  if(!validCode(code)){$('#roomErr').textContent='Invite codes are 6 letters and numbers, like K7X2MQ.';roomCodeIn.focus();return;}
+  const own=Store.get('ga_hosted',[]).find(r=>r.code===code);if(own)hostRoom(code,own.name,false);else joinRoom(code,roomEmail('ga_joined',code));});
+$('#hostForm').addEventListener('submit',e=>{e.preventDefault();const name=roomNameIn.value.trim().replace(/\s+/g,' ').slice(0,28);
+  if(name.length<2){$('#roomErr').textContent='Give your room a name with at least 2 characters.';roomNameIn.focus();return;}
+  hostRoom(newRoomCode(),name,true);});
+$('#soloBtn').addEventListener('click',()=>{state.solo=true;$('#roomErr').textContent='';showLogin();});
+$('#roomLeave').addEventListener('click',()=>{if(room.mode)leaveRoom();state.solo=false;showLogin();});
+[roomCodeIn,roomNameIn].forEach(i=>i.addEventListener('input',()=>{$('#roomErr').textContent='';}));
 
 /* setup screen */
 const avControls=$('#avControls');
@@ -1517,18 +1841,27 @@ $('#setupForm').addEventListener('submit',e=>{
   if(name.length<2){$('#pNameErr').textContent='Add a display name with at least 2 characters.';$('#pName').focus();return;}
   const role=$('#pRole').value.trim(),team=$('#pTeam').value.trim(),status=$('#pStatus').value;
   if(s.mode==='create'){
+    if(room.mode==='guest'){$('#setupErr').textContent='Joining the room…';if(!roomSend({t:'create',email:s.email,profile:{name,role,team,status,avatar:s.av,desk:s.desk}}))$('#setupErr').textContent='Not connected to the room. Check your Wi-Fi and try again.';return;}
     if(findUser(s.email)){$('#setupErr').textContent='A profile with this email already exists. Go back and log in with it instead.';return;}
     const rec={email:s.email,name,role,team,status,avatar:Object.assign({},s.av),desk:deskOf({desk:s.desk}),deskSlot:-1,received:0,createdAt:Date.now(),given:null,recent:[],inbox:[]};
-    allocDesk(rec);USERS[rec.email]=rec;saveUsers();startSession(rec);state.setup=null;enterWorld(rec);
+    if(room.mode==='host')rec.key=newUserKey(rec.email);
+    allocDesk(rec);USERS[kOf(rec)]=rec;saveUsers();if(room.mode==='host')broadcast({t:'user',rec:pubRec(rec)});
+    startSession(rec);state.setup=null;enterWorld(rec);
     toast('Welcome to Golden Apple, <b>'+esc(name)+'</b>. You have '+DAILY_APPLES+' apples to give today.','',4200,ICON_APPLE);
     if(rec.deskSlot>=0)setTimeout(()=>toast('Your desk is ready in the Work Desks room: <b>'+esc(deskLabel(rec))+'</b>. It’s the gold square on your map.','',5200),1400);
   }else{
-    const me=state.me;Object.assign(me,{name,role,team,status,avatar:Object.assign({},s.av),desk:deskOf({desk:s.desk})});allocDesk(me);putUser(me);
-    if(me.deskSlot>=0)placeDesk(me.deskSlot,me.desk,me.email);
+    const me=state.me;Object.assign(me,{name,role,team,status,avatar:Object.assign({},s.av),desk:deskOf({desk:s.desk})});saveProfile(me);
     state.player.setAvatar(me.avatar);state.setup=null;$('#screen-setup').hidden=true;resumeWorld();renderMe();lastZone='';
     toast('Profile saved.','',2000);
   }
 });
+
+// saving your own edited profile: guests send it to the host, which checks it and tells the room
+function saveProfile(me){
+  if(room.mode==='guest')roomSend({t:'update',profile:{name:me.name,role:me.role,team:me.team,status:me.status,avatar:me.avatar,desk:me.desk}});
+  else{allocDesk(me);persistRec(me);if(room.mode==='host')broadcast({t:'user',rec:pubRec(me)});}
+  syncDesks();
+}
 
 /* avatar + desk preview (second renderer) */
 const pv={renderer:null,scene:null,camera:null,av:null,desk:null,rig:null,ped:null,view:'avatar',rot:0.5,spin:0,drag:null,t:0};
@@ -1577,19 +1910,16 @@ const locals=[];
 function enterWorld(rec){
   state.me=rec;
   if(state.player)state.player.dispose(),state.chars.delete(state.player.id);
+  const old=state.chars.get('local:'+kOf(rec));if(old)removeLocal(old);
   const P=new Character({id:'me',kind:'me',data:rec});state.player=P;state.chars.set('me',P);
   P.root.position.set(SPAWN.x,0,SPAWN.z);P.heading=Math.PI;P.root.rotation.y=Math.PI;
   cam.yaw=0;cam.pitch=0.55;cam.dist=10.5;cam.target.set(SPAWN.x,1.3,SPAWN.z);
-  // every profile saved in this browser keeps one desk; other profiles appear "Away", sitting at their own desk
-  for(const l of locals.splice(0)){l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
-  for(let i=0;i<DESK_SLOTS.length;i++)clearDesk(i);
-  const myHad=rec.deskSlot;let changed=false;
-  for(const email in USERS){const u=USERS[email],had=u.deskSlot;allocDesk(u);if(u.deskSlot!==had)changed=true;if(u.deskSlot>=0)placeDesk(u.deskSlot,deskOf(u),email);}
-  if(changed){saveUsers();state.cookieOK=writeProfileCookie(rec);}
-  for(const email in USERS){if(email===rec.email)continue;const u=USERS[email];
-    const s=u.deskSlot>=0?DESK_SLOTS[u.deskSlot].spot:SPOTS.find(b=>!b.desk&&b.pose==='sit'&&!b.occ);if(!s)continue;
-    const ch=new Character({id:'local:'+email,kind:'local',data:u});state.chars.set(ch.id,ch);s.occ=ch.id;ch.spot=s;placeAt(ch,s);locals.push(ch);}
-  resumeWorld();renderMe();renderFeed();drawBoard();lastZone='';
+  // every profile keeps one desk; other people sit Away at their desk until they are online in the room
+  const myHad=rec.deskSlot;
+  if(room.mode!=='guest'){let changed=false;for(const k in USERS){const u=USERS[k],had=u.deskSlot;allocDesk(u);if(u.deskSlot!==had)changed=true;}if(changed){saveUsers();if(!room.mode)state.cookieOK=writeProfileCookie(rec);}}
+  if(room.mode==='host')setOnline(kOf(rec),true);
+  syncDesks();syncPeople();
+  resumeWorld();renderMe();renderFeed();drawBoard();renderRoomBtn();lastZone='';
   if(rec.deskSlot!==myHad)setTimeout(()=>toast(rec.deskSlot>=0?'Your desk is in the Work Desks room: <b>'+esc(deskLabel(rec))+'</b>. It’s the gold square on your map.':'All '+DESK_SLOTS.length+' desks are taken, so you don’t have a desk yet.','',5200),1400);
   const unread=(rec.inbox||[]).filter(x=>!x.read);
   if(unread.length){const ap=unread.filter(x=>x.type==='apple').reduce((a,x)=>a+x.count,0),pk=unread.filter(x=>x.type==='poke').length;
@@ -1598,11 +1928,15 @@ function enterWorld(rec){
 }
 function resumeWorld(){state.mode='world';applyViewOffset();$('#screen-login').hidden=true;$('#screen-setup').hidden=true;$('#hud').hidden=false;$('#hint').hidden=state.hintHidden;cvs.focus({preventScroll:true});}
 function leaveWorld(){
+  const k=myKey();if(room.mode==='host'&&k)setOnline(k,false);else if(room.mode==='guest')roomSend({t:'logout'});
   closeCard();if(state.player){if(state.player.seat)state.player.seat.occ=null;state.player.dispose();state.chars.delete('me');state.player=null;}
   for(const l of locals.splice(0)){l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
   state.me=null;keys.clear();showLogin();
 }
-function logout(){Cookies.del('ga_session');Store.del('ga_last');closeModal();leaveWorld();emailIn.value='';toast('Logged out. Your profile is still saved on this browser.','',3000);}
+function logout(){
+  if(!room.mode){Cookies.del('ga_session');Store.del('ga_last');}else{rememberRoom(room.mode==='host'?'ga_hosted':'ga_joined',{code:room.code,name:room.name,email:''});room.email='';}
+  closeModal();leaveWorld();emailIn.value='';toast(room.mode?'Logged out. You’re still in the room: sign in again, or leave it.':'Logged out. Your profile is still saved on this browser.','',3000);
+}
 
 /* =========================================================
    Main loop
@@ -1612,7 +1946,7 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frameN++;
   if(state.mode==='world')updatePlayer(dt);
   for(const ch of state.chars.values())ch.update(dt);
-  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);
+  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);updateRoom(dt);
   for(const S of DESK_SLOTS)if(S.desk)animateDesk(S.desk,now/1000,dt);
   waterTex.offset.x+=dt*0.015;waterTex.offset.y+=dt*0.008;
   for(const c of clouds){c.position.x+=c.userData.v*dt;if(c.position.x>100)c.position.x=-100;}
@@ -1649,7 +1983,10 @@ function frame(now){
 setInterval(()=>{if(state.mode==='world'){renderFeed();renderMe();}},20000);
 
 /* boot */
-resize();drawBoard();showLogin();
+resize();drawBoard();showLogin();renderRoomBtn();
+// an invite link (?room=CODE) joins straight away; the host's own link reopens the room
+(function(){if(typeof URLSearchParams==='undefined'||!location.search)return;const code=normCode(new URLSearchParams(location.search).get('room'));if(!validCode(code))return;
+  roomCodeIn.value=code;const own=Store.get('ga_hosted',[]).find(r=>r.code===code);if(own)hostRoom(code,own.name,false);else joinRoom(code,roomEmail('ga_joined',code));})();
 if(document.fonts&&document.fonts.load){Promise.all([document.fonts.load('600 34px "Pixelify Sans"'),document.fonts.load('700 46px "Pixelify Sans"')]).then(()=>{SIGN_DRAWERS.forEach(f=>f());drawBoard();}).catch(()=>{});}
 requestAnimationFrame(frame);
 })();

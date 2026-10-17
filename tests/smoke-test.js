@@ -1,121 +1,10 @@
-// Golden Apple smoke test — runs the real js/app.js against a fake browser and a three.js stub.
+// Golden Apple smoke test: runs the real js/app.js in one fake browser (see tests/harness.js) and checks the logic.
 // Usage: npm test   (or: node tests/smoke-test.js)
-// It checks logic only (login, apples, Golden Apple, routes, cookies). It does not render graphics.
-const fs = require('fs');
-let src = fs.readFileSync(require('path').join(__dirname, '..', 'js', 'app.js'), 'utf8');
-// test-only instrumentation: expose internals right before the IIFE closes
-src = src.replace(/\}\)\(\);\s*$/, 'window.__ga={state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup};\n})();');
-
-const errors = [];
-// ---------- tiny DOM ----------
-const listeners = new Map();
-function el(tag, id) {
-  const e = {
-    tagName: (tag || 'div').toUpperCase(), id: id || '', style: {}, dataset: {}, hidden: false, value: '', textContent: '', _html: '',
-    children: [], className: '', clientWidth: 1280, clientHeight: 800, width: 0, height: 0,
-    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
-    get innerHTML() { return this._html; }, set innerHTML(v) { this._html = String(v); },
-    get firstChild() { return this.children[0]; },
-    appendChild(c) { this.children.push(c); c.parentNode = this; return c; },
-    remove() { if (this.parentNode) { const i = this.parentNode.children.indexOf(this); if (i >= 0) this.parentNode.children.splice(i, 1); } },
-    addEventListener(t, fn) { const k = this.id + '|' + t; if (!listeners.has(k)) listeners.set(k, []); listeners.get(k).push(fn); (this._l || (this._l = {}))[t] = (this._l[t] || []).concat(fn); },
-    dispatch(t, ev) { (this._l && this._l[t] || []).forEach(fn => fn(Object.assign({ preventDefault() {}, currentTarget: this, target: this }, ev || {}))); },
-    setAttribute(k, v) { this['attr_' + k] = v; }, getAttribute(k) { return this['attr_' + k]; },
-    querySelector(s) { return getEl(s + '@' + this.id); }, querySelectorAll() { return []; },
-    focus() { document.activeElement = this; }, blur() {}, setPointerCapture() {},
-    getBoundingClientRect() { return { left: 0, top: 0, width: 1280, height: 800 }; },
-    getContext() { return ctx2d; }, toDataURL() { return 'data:image/png;base64,AA'; }
-  };
-  return e;
-}
-const ctx2d = new Proxy({}, { get: (t, k) => k === 'createLinearGradient' || k === 'createRadialGradient' ? () => ({ addColorStop() {} }) : (typeof k === 'string' && /^(fill|stroke|clear|draw|save|restore|translate|rotate|beginPath|moveTo|lineTo|closePath|fillText|measureText)/.test(k) ? () => ({ width: 10 }) : t[k]), set: (t, k, v) => { t[k] = v; return true; } });
-const els = new Map();
-function getEl(sel) { if (!els.has(sel)) els.set(sel, el('div', sel.replace(/^#/, '').split('@')[0])); return els.get(sel); }
-let cookieJar = {};
-const document = {
-  activeElement: null,
-  getElementById: id => getEl('#' + id),
-  querySelector: s => getEl(s),
-  querySelectorAll: () => [],
-  createElement: t => el(t),
-  get cookie() { return Object.entries(cookieJar).map(([k, v]) => k + '=' + v).join('; '); },
-  set cookie(str) {
-    const parts = str.split(';').map(s => s.trim()); const [nv, ...attrs] = parts; const i = nv.indexOf('='); const name = nv.slice(0, i), val = nv.slice(i + 1);
-    const exp = attrs.find(a => /^expires=/i.test(a)); if (exp && new Date(exp.slice(8)) < new Date()) { delete cookieJar[name]; return; }
-    if (val.length > 4096) throw new Error('cookie too big: ' + name);
-    cookieJar[name] = val;
-  },
-  fonts: { load: () => Promise.resolve() }
-};
-const store = {};
-const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
-let rafCb = null;
-const win = {
-  THREE: null, document, localStorage, devicePixelRatio: 2, location: { protocol: 'https:' },
-  matchMedia: () => ({ matches: false }), addEventListener: (t, fn) => { (win._l[t] = win._l[t] || []).push(fn); }, _l: {},
-  requestAnimationFrame: cb => { rafCb = cb; }, performance: { now: () => now }, setInterval: () => 0
-};
-let now = 1000;
-
-// ---------- THREE stub (math-faithful where the app relies on it) ----------
-class V3 { constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
-  set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
-  clone() { return new V3(this.x, this.y, this.z); } setScalar(s) { this.x = this.y = this.z = s; return this; }
-  distanceTo(v) { return Math.hypot(this.x - v.x, this.y - v.y, this.z - v.z); }
-  lerp(v, t) { this.x += (v.x - this.x) * t; this.y += (v.y - this.y) * t; this.z += (v.z - this.z) * t; return this; }
-  project() { this.x = 0; this.y = 0; this.z = 0.5; return this; } }
-class Obj { constructor() { this.position = new V3(); this.rotation = { x: 0, y: 0, z: 0, set(a, b, c) { this.x = a; this.y = b; this.z = c; } }; this.scale = new V3(1, 1, 1); this.children = []; this.visible = true; this.userData = {}; this.matrixWorld = {}; }
-  add(...o) { o.forEach(c => { if (!c || typeof c !== 'object') throw new Error('add() bad child'); this.children.push(c); }); return this; }
-  remove(o) { const i = this.children.indexOf(o); if (i >= 0) this.children.splice(i, 1); } lookAt() {} updateMatrixWorld() {} }
-class Geo { constructor(...a) { this.args = a; const n = 24; this.attributes = { uv: { count: n, setXY(i, u, v) { if (i < 0 || i >= n) throw new Error('uv index out of range ' + i); if (!(u >= 0 && u <= 1 && v >= 0 && v <= 1)) throw new Error('uv out of [0,1]: ' + u + ',' + v); }, needsUpdate: false } }; } dispose() {} }
-class Mat { constructor(o) { Object.assign(this, o || {}); } dispose() {} }
-class Tex { constructor(c) { this.image = c; this.offset = { x: 0, y: 0 }; this.repeat = { set() {} }; } dispose() {} }
-class InstancedMesh extends Obj { constructor(g, m, n) { super(); if (!(n > 0)) throw new Error('InstancedMesh count ' + n); this.count = n; this.instanceMatrix = {}; this.instanceColor = null; }
-  setMatrixAt(i) { if (i < 0 || i >= this.count) throw new Error('matrix index ' + i); } setColorAt(i, c) { if (i < 0 || i >= this.count) throw new Error('color index ' + i); if (!this.instanceColor) this.instanceColor = {}; } }
-const M4 = class { makeTranslation() { return this; } makeScale() { return this; } setPosition() { return this; } compose() { return this; } };
-const THREE = {
-  Vector3: V3, Vector2: class { set() { return this; } }, Matrix4: M4, Quaternion: class { setFromEuler() { return this; } }, Euler: class { set() { return this; } },
-  Color: class { constructor(c) { this.c = c; } set(c) { if (typeof c === 'string' && !/^#[0-9a-f]{6}$/i.test(c)) throw new Error('bad color ' + c); this.c = c; return this; } },
-  Group: Obj, Scene: Obj, Mesh: class extends Obj { constructor(g, m) { super(); if (!g || !m) throw new Error('Mesh needs geo+mat'); this.geometry = g; this.material = m; } }, Sprite: Obj, InstancedMesh,
-  BoxGeometry: Geo, PlaneGeometry: Geo, RingGeometry: Geo,
-  MeshLambertMaterial: Mat, MeshBasicMaterial: Mat, SpriteMaterial: Mat, CanvasTexture: Tex,
-  HemisphereLight: Obj, AmbientLight: Obj, DirectionalLight: class extends Obj { constructor() { super(); this.shadow = { mapSize: { set() {} }, camera: {} }; this.target = new Obj(); } },
-  PerspectiveCamera: class extends Obj { setViewOffset() {} clearViewOffset() {} updateProjectionMatrix() {} },
-  WebGLRenderer: class { constructor() { this.domElement = el('canvas', 'glcanvas'); this.shadowMap = {}; } setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} },
-  Raycaster: class { setFromCamera() {} intersectObjects() { return []; } }, Fog: class {},
-  NearestFilter: 1, RepeatWrapping: 2, PCFSoftShadowMap: 3, DoubleSide: 4, AdditiveBlending: 5
-};
-win.THREE = THREE;
-
-// ---------- strict Web Audio stub: throws on anything a real browser would reject ----------
-let audioNodes = 0;
-const finite = (...a) => a.forEach(x => { if (typeof x !== 'number' || !isFinite(x)) throw new Error('audio value not finite: ' + x); });
-class AParam { constructor(v) { this.value = v; }
-  setValueAtTime(v, t) { finite(v, t); return this; } linearRampToValueAtTime(v, t) { finite(v, t); return this; }
-  exponentialRampToValueAtTime(v, t) { finite(v, t); if (!(v > 0)) throw new Error('exponential ramp to ' + v); return this; }
-  setTargetAtTime(v, t, c) { finite(v, t, c); return this; } cancelScheduledValues() { return this; } }
-class ANode { constructor(ctx) { this.ctx = ctx; audioNodes++; } disconnect() {}
-  connect(n) { if (!(n instanceof ANode || n instanceof AParam || n === this.ctx.destination)) throw new Error('connect() to a non-node'); return n; } }
-const typed = (cls, ok) => Object.defineProperty(cls.prototype, 'type', { get() { return this._t; }, set(v) { if (!ok.includes(v)) throw new Error('bad type ' + v); this._t = v; } });
-class AOsc extends ANode { constructor(c) { super(c); this.frequency = new AParam(440); this._t = 'sine'; } start(t) { finite(t || 0); } stop(t) { finite(t || 0); } }
-typed(AOsc, ['sine', 'square', 'sawtooth', 'triangle']);
-class AFilter extends ANode { constructor(c) { super(c); this.frequency = new AParam(350); this.Q = new AParam(1); this._t = 'lowpass'; } }
-typed(AFilter, ['lowpass', 'highpass', 'bandpass']);
-class AGain extends ANode { constructor(c) { super(c); this.gain = new AParam(1); } }
-class ADelay extends ANode { constructor(c) { super(c); this.delayTime = new AParam(0); } }
-class ASrc extends ANode { constructor(c) { super(c); this.buffer = null; this.loop = false; } start(t, o, d) { finite(t || 0, o || 0, d || 0); if (!this.buffer) throw new Error('buffer source started without a buffer'); } stop() {} }
-win.AudioContext = class { constructor() { this.state = 'running'; this.sampleRate = 8000; this.destination = {}; } get currentTime() { return now / 1000; }
-  createGain() { return new AGain(this); } createOscillator() { return new AOsc(this); } createBiquadFilter() { return new AFilter(this); } createDelay() { return new ADelay(this); }
-  createBufferSource() { return new ASrc(this); } createBuffer(ch, len) { const d = new Float32Array(len); return { getChannelData: () => d, length: len }; }
-  suspend() { this.state = 'suspended'; return Promise.resolve(); } resume() { this.state = 'running'; return Promise.resolve(); } };
-global.window = win; global.document = document; global.localStorage = localStorage; global.THREE = THREE;
-global.matchMedia = win.matchMedia; global.requestAnimationFrame = win.requestAnimationFrame; global.addEventListener = win.addEventListener;
-global.location = win.location; global.devicePixelRatio = 2; global.btoa = s => Buffer.from(s, 'binary').toString('base64'); global.atob = s => Buffer.from(s, 'base64').toString('binary');
-global.escape = escape; global.unescape = unescape;
-const realPerf = performance; Object.defineProperty(global, 'performance', { value: { now: () => now } });
-
-function frames(n, dtMs) { for (let i = 0; i < n; i++) { now += dtMs; const cb = rafCb; rafCb = null; if (!cb) throw new Error('loop stopped (no rAF scheduled)'); cb(now); } }
-const ok = (cond, msg) => { if (!cond) { errors.push('FAIL: ' + msg); console.log('  ✗', msg); } else console.log('  ✓', msg); };
+// It covers login, apples, Golden Apple, routes, cookies, desks, sound and food. It does not render graphics.
+const H = require('./harness');
+const c = H.createClient(), { getEl, store, cookieJar } = c, window = c.win;
+const frames = (n, dtMs) => c.frames(n, dtMs);
+const { ok, done } = H.makeChecker();
 
 // a profile saved by the old build, still holding apples and pokes from the removed demo coworkers
 const t0 = Date.now();
@@ -127,10 +16,8 @@ store.ga_users = JSON.stringify({ 'old@example.com': { email: 'old@example.com',
 store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: [{ kind: 'golden', to: 'Old Timer', at: t0 }, { kind: 'apple', from: 'Priya Nair', to: 'Old Timer', count: 3, reason: 'Helping hand', at: t0 }, { kind: 'apple', from: 'Arjun Mehta', to: 'Fatima Zahra', count: 1, reason: 'Problem solver', at: t0 }] });
 
 (async () => {
-  try {
-    eval(src);
-  } catch (e) { console.log('BOOT ERROR', e.stack); process.exit(1); }
-  const G = window.__ga;
+  try { c.boot(); } catch (e) { console.log('BOOT ERROR', e.stack); process.exit(1); }
+  const G = c.G;
   console.log('Boot');
   ok(G.state.mode === 'login', 'starts on login screen');
   ok(G.state.chars.size === 0, 'no demo coworkers spawned (world is empty until real people log in)');
@@ -185,9 +72,12 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(G.Sound.ctx === null, 'no audio before the first click or key press (autoplay rules)');
   G.sfx('give'); ok(true, 'sound effects are silent no-ops before audio starts');
   window._l.pointerdown.forEach(fn => fn({}));
-  ok(!!G.Sound.ctx && audioNodes > 0, 'first pointer press starts the audio engine (' + audioNodes + ' nodes)');
+  ok(!!G.Sound.ctx && c.audioNodes > 0, 'first pointer press starts the audio engine (' + c.audioNodes + ' nodes)');
 
   console.log('Login → profile setup → world');
+  ok(!getEl('#roomStep').hidden && getEl('#loginForm').hidden, 'the start screen asks to join or create a room first');
+  getEl('#soloBtn').dispatch('click');
+  ok(getEl('#roomStep').hidden && !getEl('#loginForm').hidden, '"Play on this browser only" goes straight to sign-in');
   const email = getEl('#email'); email.value = 'not-an-email'; getEl('#loginForm').dispatch('submit');
   ok(G.state.mode === 'login', 'invalid email is rejected');
   email.value = '  Tester@Example.com '; getEl('#loginForm').dispatch('submit');
@@ -241,12 +131,12 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   goTo(-25, 0); ok(G.Sound.theme === 'restroom', 'the Restroom has its own theme');
   goTo(0, 20); ok(G.Sound.theme === 'lake', 'so does Lakeside');
   goTo(ap.x, ap.z); ok(G.Sound.theme === 'desks', 'and the Work Desks');
-  const n0 = audioNodes; frames(120, 16); ok(audioNodes > n0, 'notes keep being scheduled while you stand still');
+  const n0 = c.audioNodes; frames(120, 16); ok(c.audioNodes > n0, 'notes keep being scheduled while you stand still');
   for (const n of ['step', 'jump', 'land', 'splash', 'sit', 'stand', 'give', 'catch', 'golden', 'poke', 'poked', 'boop', 'ui', 'open', 'close', 'deny']) G.sfx(n, {});
   for (const g of ['grass', 'path', 'plaza', 'oak', 'pantry', 'tile', 'sand', 'water', 'dock']) G.sfx('step', { ground: g });
   ok(true, 'every sound effect and footstep surface plays without errors');
-  G.toggleMute(); const n1 = audioNodes; frames(60, 16);
-  ok(G.SND.muted && G.Sound.ctx.state === 'suspended' && audioNodes === n1, 'mute (M) suspends audio and schedules nothing');
+  G.toggleMute(); const n1 = c.audioNodes; frames(60, 16);
+  ok(G.SND.muted && G.Sound.ctx.state === 'suspended' && c.audioNodes === n1, 'mute (M) suspends audio and schedules nothing');
   G.toggleMute(); ok(!G.SND.muted && G.Sound.ctx.state === 'running' && JSON.parse(store.ga_sound).muted === false, 'unmute resumes, and the setting is saved');
   G.state.player.root.position.set(0, 0, 9.5); frames(5, 16);
 
@@ -273,8 +163,8 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   Pf.root.position.set(31.5, 0, G.SLOT_Z[6]); G.tryInteract(); ok(Pf.held === G.menu.items[6], 'taking another item swaps it');
   Pf.setAvatar(G.state.me.avatar); ok(Pf.av.armR.children.includes(Pf.heldMesh), 'the item stays in your hand when your avatar is rebuilt');
   keyTap('f'); ok(!!Pf.eating && Pf.anim.eat === 'drink', 'F starts drinking straight away (slot 7 is a drink)');
-  let n2 = audioNodes; frames(40, 50);
-  ok(!Pf.eating && !Pf.held && Pf.anim.eat === null && audioNodes > n2, 'after 1.6 s the drink is gone, with gulp sounds and an "ahh"');
+  let n2 = c.audioNodes; frames(40, 50);
+  ok(!Pf.eating && !Pf.held && Pf.anim.eat === null && c.audioNodes > n2, 'after 1.6 s the drink is gone, with gulp sounds and an "ahh"');
   Pf.root.position.set(31.5, 0, G.SLOT_Z[0]); G.tryInteract(); keyTap('f');
   ok(Pf.eating && Pf.anim.eat === 'eat', 'food uses the eating animation (arm to mouth, crumbs, crunching)');
   frames(40, 50); ok(!Pf.held && !Pf.eating, 'and is eaten after 1.6 s');
@@ -343,7 +233,6 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(rec.deskSlot === testerSlot && rec.desk.pet === 1 && rec.desk.decor.length === 2, 'desk spot and desk choices are rebuilt from the cookie too');
 
   await new Promise(r => setTimeout(r, 300));
-  console.log(errors.length ? `\n${errors.length} FAILURE(S)` : '\nALL CHECKS PASSED');
-  process.exit(errors.length ? 1 : 0);
+  done();
 })().catch(e => { console.log('RUNTIME ERROR', e.stack); process.exit(1); });
 process.on('uncaughtException', e => { console.log('UNCAUGHT', e.stack); process.exit(1); });
