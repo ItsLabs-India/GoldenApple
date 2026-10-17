@@ -9,7 +9,8 @@ const clock = { now: 1000 };
 const EXPORTS = 'state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
   + 'DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
   + 'FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup,'
-  + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld';
+  + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld,'
+  + 'V,STALLS,rr,nearestStall,nearestSink,nutrition,vitalSpeed,canRun,saveVitals';
 function appSource() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   if (!/\}\)\(\);\s*$/.test(src)) throw new Error('app.js must end with })();');

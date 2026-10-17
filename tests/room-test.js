@@ -90,6 +90,23 @@ function signIn(c, email, name) {
   ok(H_.USERS()[ak].name === 'Arjun Mehta' && H_.USERS()[ak].desk.pet === 2 && B.USERS()[ak].name === 'Arjun Mehta', 'guest A’s new name reaches the host and guest B');
   ok(/\|.*/.test(B.DESK_SLOTS[aSlot].sig) && B.DESK_SLOTS[aSlot].sig.endsWith(B.deskToArr(B.USERS()[ak].desk).join()), 'guest B’s screen rebuilds A’s desk with the dog and cactus');
 
+  console.log('Restroom in a room');
+  A.V.bl = 0; B.V.bl = 0;
+  const st0 = A.STALLS[0], st1 = B.STALLS[1];
+  A.state.player.root.position.set(st0.spot.x, 0, st0.spot.z); A.tryInteract();
+  B.state.player.root.position.set(st1.spot.x, 0, st1.spot.z); B.tryInteract(); run(40);
+  const aOnHost2 = H_.state.chars.get('local:' + ak), bOnHost2 = H_.state.chars.get('local:' + bk);
+  ok(!aOnHost2.root.visible && !bOnHost2.root.visible && H_.STALLS[0].occ === 'local:' + ak && H_.STALLS[1].occ === 'local:' + bk, 'two guests use two stalls at once; the host sees both stalls Occupied and nobody inside');
+  ok(B.STALLS[0].occ === 'local:' + ak && /Occupied/.test(H_.STALLS[0].label.innerHTML) && !/Arjun/.test(H_.STALLS[0].label.innerHTML), 'others see only “Occupied”, not who is inside');
+  H_.state.player.root.position.set(H_.STALLS[0].spot.x, 0, H_.STALLS[0].spot.z); H_.tryInteract();
+  ok(!H_.rr.use, 'the host can’t walk into a stall someone else is using');
+  run(220, 16);
+  ok(aOnHost2.root.visible && H_.STALLS[0].occ === null && H_.STALLS[1].occ === null, 'when they are done the stalls free up and they reappear');
+  H_.tryInteract(); run(40); ok(H_.rr.use && A.STALLS[0].occ === 'local:' + hk, 'now the host can use the same stall, and guests see it Occupied');
+  run(220, 16);
+  A.state.player.root.position.set(-24.5, 0, -4.4); A.tryInteract(); run(20);
+  ok(H_.state.chars.get('local:' + ak).anim.pose === 'wash', 'hand washing shows on other screens');
+  run(200, 16);
   console.log('Leaving and coming back');
   A.logout(); run(10);
   ok(B.state.chars.get('local:' + ak).kind === 'local' && B.state.chars.get('local:' + ak).spot === B.DESK_SLOTS[aSlot].spot, 'when guest A logs out, others see them Away at their desk');

@@ -180,6 +180,23 @@ legend{padding:0 0 4px;font-family:var(--f-display);font-size:15px;font-weight:6
 .stat{display:grid;gap:6px}
 .stat-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .goal{font-size:12px;color:var(--muted)}
+/* needs: health, energy, restroom */
+.vitals{display:grid;gap:5px;padding-top:8px;border-top:2px dashed var(--bark-hi)}
+.vital{display:grid;grid-template-columns:14px 62px minmax(0,1fr) 24px;gap:6px;align-items:center}
+.vital img{width:14px;height:14px;object-fit:contain;image-rendering:pixelated}
+.vital .lbl{font-size:10px}
+.vital .bar{height:8px;border-width:2px}
+.vital .bar i{transition:width .4s linear;box-shadow:none}
+#vHp .bar i{background:#e0442e}#vEn .bar i{background:var(--gold)}#vBl .bar i{background:#6fb7e8}
+.vital .num{font-family:var(--f-num);font-size:17px;line-height:1;text-align:right}
+.vital.low .num{color:var(--apple-hi)}.vital.low .bar{border-color:var(--apple-deep)}
+.vwarn{font-size:12px;color:var(--apple-hi);font-weight:700}
+/* restroom stall label */
+.stall-label{position:absolute;left:0;top:0;display:grid;gap:4px;justify-items:center;white-space:nowrap;font-family:var(--f-display);font-size:13px;padding:5px 8px;background:rgba(17,11,7,.82);color:var(--cream);border:2px solid var(--apple);pointer-events:none}
+.stall-label.mine{border-color:var(--st-break)}
+.stall-label .prog{display:block;width:96px;height:6px;background:var(--bark-lo);border:1px solid #000}
+.stall-label .prog b{display:block;height:100%;background:var(--st-break)}
+@media (prefers-reduced-motion: reduce){.vital .bar i{transition:none}}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
 .hud-tr{position:absolute;top:12px;right:max(16px,env(safe-area-inset-right,0px));width:188px;display:grid;gap:8px}
 .map{padding:8px;display:grid;gap:6px}

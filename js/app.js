@@ -20,6 +20,7 @@
      Walk routes ...................... spot-to-spot paths (layout check)
      Effects .......................... particles, flying apples, rings
      Sound ............................ generated music, ambience and effects per place
+     Health, energy and the restroom .. needs, stalls, hand washing
      Player, camera, input ............ movement, collision, mouse/touch
      Labels ........................... nameplates + speech bubbles
      Minimap
@@ -367,6 +368,8 @@ function sign(x,z,rot,title,sub){
 }
 
 /* ---------- personal desks: one per person, built from their desk options ---------- */
+const STALLS=[];// restroom stalls, filled by buildFurniture: {i,zc,spot,pivot,sign,occ,ang,swing,label}
+const STALL_MAT={door:new THREE.MeshLambertMaterial({color:0x6d93a8,map:noiseTex}),knob:new THREE.MeshLambertMaterial({color:0xd9e2e6}),free:new THREE.MeshBasicMaterial({color:0x6cbf4c}),occ:new THREE.MeshBasicMaterial({color:0xe0442e})};
 const DESK_SLOTS=[],DESK_ORDER=[];// filled by buildFurniture; DESK_ORDER hands out the slots nearest the door first
 const DMAT=new Map();
 function dmat(c,kind){const k=(kind||'l')+c;if(!DMAT.has(k))DMAT.set(k,kind==='g'?new THREE.MeshBasicMaterial({color:c}):kind==='t'?new THREE.MeshLambertMaterial({color:c,transparent:true,opacity:0.35,depthWrite:false}):new THREE.MeshLambertMaterial({color:c,map:noiseTex}));return DMAT.get(k);}
@@ -502,14 +505,22 @@ function buildFurniture(){
 
   /* --- Restroom --- */
   for(const zp of [-5,-2,1,4])fbox(-29,0.95,zp,2.0,1.9,0.08,'#8fb3c4');
-  for(const zc of [-3.5,-0.5,2.5]){fbox(-28.0,0.95,zc,0.08,1.8,2.7,'#7aa0b3');fbox(-27.93,0.95,zc+0.9,0.04,0.08,0.18,'#d9e2e6');}
+  // three private stalls: front wall with a doorway, a toilet and paper roll inside (only seen through the open door)
+  for(const zc of [-3.5,-0.5,2.5]){
+    fbox(-28.0,0.95,zc-0.975,0.08,1.8,1.05,'#7aa0b3');fbox(-28.0,0.95,zc+0.975,0.08,1.8,1.05,'#7aa0b3');fbox(-28.0,1.83,zc,0.08,0.04,0.9,'#7aa0b3');
+    fbox(-29.55,0.2,zc,0.42,0.4,0.48,'#f4f7f8');fbox(-29.55,0.43,zc,0.46,0.04,0.52,'#dfe5e8');fbox(-29.88,0.62,zc,0.2,0.5,0.52,'#f4f7f8');fbox(-29.5,0.85,zc+1.42,0.12,0.12,0.05,'#ffffff');}
   solidRect(-30,-5,-28,4,2);
   fbox(-24.5,0.42,-5.5,6,0.84,1,'#e4dcd0');fbox(-24.5,0.87,-5.5,6.04,0.06,1.04,'#5c6670');solidRect(-27.5,-6,-21.5,-5,0.9);
   for(const x of [-26.5,-24.5,-22.5]){
     fbox(x,0.91,-5.45,0.6,0.04,0.5,'#f4f7f8');fbox(x,1.02,-5.86,0.06,0.2,0.06,'#b9c1c7');fbox(x,1.66,-5.96,0.8,0.8,0.04,'#c9ecf8','glow');
     addSpot({zone:'restroom',x,z:-4.45,y:0,face:Math.PI,pose:'wash',via:[{x:-24,z:-2.4},{x,z:-3.4}]});
   }
-  for(const zc of [-3.5,-0.5,2.5])addSpot({zone:'restroom',x:-27.4,z:zc,y:0,face:-Math.PI/2,pose:'stall',via:[{x:-25.2,z:zc}]});
+  for(const zc of [-3.5,-0.5,2.5]){const spot=addSpot({zone:'restroom',x:-27.4,z:zc,y:0,face:-Math.PI/2,pose:'stall',via:[{x:-25.2,z:zc}]});
+    const pivot=new THREE.Group();pivot.position.set(-27.95,0,zc+0.45);pivot.rotation.y=-0.35;scene.add(pivot);// hinge; the door swings out into the room
+    const door=new THREE.Mesh(UNIT_BOX,STALL_MAT.door);door.scale.set(0.06,1.66,0.88);door.position.set(0,0.95,-0.45);door.castShadow=SHADOWS;pivot.add(door);
+    const knob=new THREE.Mesh(UNIT_BOX,STALL_MAT.knob);knob.scale.set(0.04,0.06,0.06);knob.position.set(0.05,0.95,-0.8);pivot.add(knob);
+    const sign=new THREE.Mesh(UNIT_BOX,STALL_MAT.free);sign.scale.set(0.03,0.09,0.24);sign.position.set(-27.94,1.93,zc);scene.add(sign);
+    STALLS.push({i:STALLS.length,zc,spot,pivot,sign,occ:null,ang:-0.35,swing:0,label:null});}
   fbox(-20.15,1.25,-4.4,0.16,0.4,0.5,'#d0d6da');plant(-21.4,5.0,1);
 
   /* --- Plaza --- */
@@ -722,7 +733,7 @@ function updateFood(dt){
   if(P.held&&FOOD[P.held].hot&&!reduceMotion){P.steamT=(P.steamT||0)-dt;if(P.steamT<=0){P.steamT=0.35;const h=handPos(P);spawnP(h.x,h.y+0.15,h.z,rand(-0.05,0.05),0.35,rand(-0.05,0.05),1.1,0.045,'#f4f6f7',-0.05);}}
   const e=P.eating;if(!e)return;e.t+=dt;const drink=isDrink(e.f);
   if(e.t>=e.next){e.next+=drink?0.4:0.22;sfx(e.f.snd);if(!drink){const m=mouthPos(P);for(let i=0;i<(reduceMotion?1:4);i++)spawnP(m.x,m.y,m.z,rand(-0.8,0.8),rand(0.2,1.2),rand(-0.8,0.8),0.6,0.045,pick(e.f.cols),9);}}
-  if(e.t>=EAT_TIME){P.eating=null;P.anim.eat=null;P.dropHeld();sfx(drink?'ahh':'burp');P.say(e.f.id==='coffee'?'Ahh, coffee.':drink?'Refreshing!':'Yum!',1600);}
+  if(e.t>=EAT_TIME){P.eating=null;P.anim.eat=null;P.dropHeld();sfx(drink?'ahh':'burp');const dirty=applyNutrition(e.f);P.say(dirty?'Should have washed my hands first…':e.f.id==='coffee'?'Ahh, coffee.':drink?'Refreshing!':'Yum!',1800);}
 }
 
 /* =========================================================
@@ -830,7 +841,7 @@ class Character{
   constructor(o){
     this.id=o.id;this.kind=o.kind;this.data=o.data;
     this.root=new THREE.Group();scene.add(this.root);
-    this.anim={eat:null,phase:0,speed:0,run:false,air:false,pose:'stand',t:Math.random()*10,celebrate:0,startle:0,poke:0,give:0,wave:0};
+    this.anim={yawn:0,eat:null,phase:0,speed:0,run:false,air:false,pose:'stand',t:Math.random()*10,celebrate:0,startle:0,poke:0,give:0,wave:0};
     this.heading=0;this.baseY=0;this.hopY=0;this.hopV=0;this.vy=0;this.onGround=true;this.hiddenInStall=false;
     const hb=new THREE.Mesh(HIT_GEO,HIT_MAT);hb.position.y=0.98;hb.userData.char=this;this.root.add(hb);this.hit=hb;
     this.crown=new THREE.Group();const ap=makeApple(true,0.62);this.crown.add(ap);
@@ -879,6 +890,7 @@ class Character{
     if(a.wave>0){a.wave-=dt;aRz=-2.7+Math.sin(a.t*16)*0.35;aRx=0;}
     if(a.eat==='eat'){aRx=-1.75+Math.sin(a.t*24)*0.13;aRz=0.32;hX=0.06+Math.sin(a.t*24)*0.03;}
     else if(a.eat==='drink'){aRx=-2.2+Math.sin(a.t*6)*0.05;aRz=0.3;hX=-0.35;}
+    if(a.yawn>0){a.yawn-=dt;const k=Math.sin(clamp(1-a.yawn/1.6,0,1)*Math.PI);hX=-0.35*k;aLx=-2.1*k;aLz=-0.3*k;}
     if(a.poke>0){a.poke-=dt;const k=Math.sin(clamp((0.45-a.poke)/0.45,0,1)*Math.PI);aRx=-1.55*k;aRz=0;}
     if(a.give>0){a.give-=dt;const k=Math.sin(clamp((0.55-a.give)/0.55,0,1)*Math.PI);aRx=-2.3*k;aRz=0;}
     if(a.celebrate>0){a.celebrate-=dt;aRz=-2.6+Math.sin(a.t*14)*0.2;aLz=2.6-Math.sin(a.t*14)*0.2;aRx=aLx=0;}
@@ -1075,10 +1087,123 @@ function sfx(name,o){
     case 'ahh':tone(F,520,t,0.4,{to:330,v:0.04,a:0.05});hiss(F,t,0.35,{type:'bandpass',f:900,v:0.03,a:0.08});break;
     case 'brew':for(let i=0;i<11;i++)hiss(F,t+i*0.18,0.1,{type:'bandpass',f:rand(250,550),v:0.07,q:5});hiss(F,t+0.6,1.5,{f:4000,v:0.04,a:0.3});tone(F,1320,t+BREW_TIME,0.4,{v:0.04});tone(F,1760,t+BREW_TIME+0.1,0.5,{v:0.03});break;
     case 'menu':[84,88,91].forEach((m,i)=>tone(F,mtof(m),t+i*0.09,0.25,{type:'triangle',v:0.04}));break;
+    case 'door':tone(F,170,t,0.35,{type:'sawtooth',to:240,v:0.025,lp:700});hiss(F,t+0.3,0.05,{type:'bandpass',f:900,v:0.06});break;
+    case 'lock':tone(F,1400,t,0.03,{type:'square',v:0.03,lp:3000});tone(F,900,t+0.05,0.03,{type:'square',v:0.03,lp:3000});break;
+    case 'flush':hiss(F,t,1.8,{type:'lowpass',f:1400,v:0.16,a:0.05});for(let i=0;i<6;i++)hiss(F,t+0.4+i*0.18,0.14,{type:'bandpass',f:rand(250,500),v:0.06,q:5});tone(F,600,t+1.5,0.5,{to:300,v:0.03});break;
+    case 'water':hiss(F,t,3,{type:'bandpass',f:1300,v:0.07,a:0.15,q:0.7});hiss(F,t,3,{type:'highpass',f:4500,v:0.025,a:0.15});break;
+    case 'growl':tone(F,72,t,0.7,{type:'sawtooth',to:52,v:0.07,lp:220,a:0.08});hiss(F,t+0.1,0.5,{type:'lowpass',f:300,v:0.05,a:0.1});break;
+    case 'yawn':tone(F,430,t,0.9,{to:230,v:0.035,a:0.12});hiss(F,t,0.8,{type:'bandpass',f:700,v:0.025,a:0.2});break;
     case 'deny':tone(F,190,t,0.09,{type:'square',v:0.04,lp:900});tone(F,150,t+0.11,0.12,{type:'square',v:0.04,lp:900});break;
   }
 }
 addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('button,.sw');if(b&&!b.disabled)sfx('ui');},true);
+
+/* =========================================================
+   Health, energy and the restroom
+   Three needs drift in real time. Food fills health and some energy, coffee fills energy, everything you
+   eat or drink fills the restroom need, and sitting down rests you. Low values slow you down.
+   The restroom has three private stalls: you are hidden while inside, and others only see "Occupied".
+   ========================================================= */
+const VITAL_DEFAULT={hp:85,en:85,bl:15,clean:true};
+// points per second. Sitting at your own desk is working: it drains energy and health faster; any other seat is a rest
+const VRATE={hp:-1.8/60,en:-1.3/60,run:-2.8/60,rest:5/60,workEn:-2.4/60,workHp:-3/60,bl:1.2/60};
+const V=Object.assign({},VITAL_DEFAULT,{growl:30,yawn:25,urge:20,save:5,ui:0,warned:{}});
+const vclamp=v=>clamp(+v||0,0,100);// keep full precision: per-frame changes are tiny (rounding happens on screen)
+// what each item gives: health, energy, restroom need
+function nutrition(f){
+  if(f.id==='coffee')return{hp:0,en:45,bl:22};
+  if(f.id==='chai')return{hp:2,en:25,bl:16};
+  if(f.id==='water')return{hp:4,en:4,bl:18};
+  if(f.cat==='drink')return{hp:6,en:8,bl:20};
+  if(f.cat==='fruit')return{hp:15,en:8,bl:f.snd==='juicy'?10:6};
+  return{hp:35,en:10,bl:8};// veg and non-veg meals
+}
+// eating with unwashed hands after the restroom only does half the good
+function applyNutrition(f){const n=nutrition(f),dirty=!V.clean&&!isDrink(f);V.hp=vclamp(V.hp+n.hp*(dirty?0.5:1));V.en=vclamp(V.en+n.en);V.bl=vclamp(V.bl+n.bl);renderVitals();return dirty;}
+function vitalSpeed(){let s=1;if(V.en<10)s*=0.65;else if(V.en<25)s*=0.85;if(V.hp<10)s*=0.8;if(V.bl>=95)s*=0.85;return s;}
+const canRun=()=>V.en>=10&&V.hp>=10;
+// pixel icons for the three bars: heart (health), bolt (energy), drop (restroom)
+$('#icHp').src=pixelIcon(['.rr.rr.','rhrrrrr','rrrrrrr','.rrrrr.','..rrr..','...r...'],{r:'#e0442e',h:'#ff8f6e'},2);
+$('#icEn').src=pixelIcon(['...yy.','..yy..','.yyyy.','yyyy..','..yy..','.yy...','.y....'],{y:'#f2b632'},2);
+$('#icBl').src=pixelIcon(['..b..','.bbb.','.bbb.','bhbbb','bhbbb','bbbbb','.bbb.'],{b:'#6fb7e8',h:'#d7eefc'},2);
+// needs are kept per person on this browser; after 3 hours away you come back fresh
+function loadVitals(rec){const v=Store.get('ga_vitals',{})[kOf(rec)],fresh=!v||Date.now()-(v.at||0)>3*3600e3;
+  Object.assign(V,fresh?VITAL_DEFAULT:{hp:vclamp(v.hp),en:vclamp(v.en),bl:vclamp(v.bl),clean:v.clean!==false});V.warned={};renderVitals();}
+function saveVitals(){if(!state.me)return;const all=Store.get('ga_vitals',{});all[kOf(state.me)]={hp:V.hp,en:V.en,bl:V.bl,clean:V.clean,at:Date.now()};Store.set('ga_vitals',all);}
+addEventListener('beforeunload',saveVitals);
+function warnOnce(k,on,clear,msg){if(on&&!V.warned[k]){V.warned[k]=true;toast(msg,'',4200);}else if(clear&&V.warned[k])V.warned[k]=false;}
+function updateVitals(dt){
+  if(state.mode!=='world'||!state.player)return;const P=state.player;
+  if(!rr.use){// needs pause while you are in the restroom
+    const running=P.anim.speed>0.1&&P.anim.run,working=!!(P.seat&&P.seat.desk),starving=V.hp<10?2:1;
+    V.hp=vclamp(V.hp+(working?VRATE.workHp:VRATE.hp*(running?1.5:1))*dt);
+    V.en=vclamp(V.en+(working?VRATE.workEn*starving:P.seat?VRATE.rest:(running?VRATE.run:VRATE.en)*starving)*dt);
+    V.bl=vclamp(V.bl+VRATE.bl*dt);
+  }
+  V.growl-=dt;V.yawn-=dt;V.urge-=dt;
+  if(V.hp<30&&V.growl<=0&&!P.eating){V.growl=V.hp<10?20:45;sfx('growl');P.say(V.hp<10?'I’m starving…':'*stomach growls*',2200);}
+  if(V.en<25&&V.yawn<=0&&!rr.use){V.yawn=V.en<10?15:35;sfx('yawn');P.anim.yawn=1.6;P.say(V.en<10?'So tired…':'*yawn*',2000);}
+  if(V.bl>=75&&V.urge<=0&&!rr.use){V.urge=V.bl>=95?12:40;P.say(V.bl>=95?'I really need the restroom!':'I should find the restroom.',2400);}
+  warnOnce('hp',V.hp<30,V.hp>45,'You’re getting hungry. Grab something from the Pantry counter.');
+  warnOnce('en',V.en<25,V.en>40,'You’re low on energy. Have a coffee in the Pantry, or sit down for a while.');
+  warnOnce('bl',V.bl>=75,V.bl<50,'Time for a restroom break. The Restroom is west of the plaza.');
+  V.save-=dt;if(V.save<=0){V.save=5;saveVitals();}
+  V.ui-=dt;if(V.ui<=0){V.ui=0.5;renderVitals();}
+}
+function renderVitals(){
+  const row=(k,v,bad)=>{$('#v'+k+'Bar').style.width=v+'%';$('#v'+k+'Num').textContent=Math.round(v);$('#v'+k).classList.toggle('low',bad);};
+  row('Hp',V.hp,V.hp<30);row('En',V.en,V.en<25);row('Bl',V.bl,V.bl>=75);
+  const w=[];if(V.hp<10)w.push('Starving');else if(V.hp<30)w.push('Hungry');if(V.en<10)w.push('Exhausted');else if(V.en<25)w.push('Tired');
+  if(V.bl>=95)w.push('Restroom: urgent');else if(V.bl>=75)w.push('Needs the restroom');if(!V.clean)w.push('Wash your hands');
+  const el=$('#vWarn');el.textContent=w.join(' · ');el.hidden=!w.length;
+}
+/* ---------- restroom: stalls and sinks ---------- */
+const rr={use:null,wash:null};
+const SINKS=()=>SPOTS.filter(s=>s.zone==='restroom'&&s.pose==='wash');
+function nearestStall(){const P=state.player;if(!P)return null;const p=P.root.position;let best=null,bd=1.3;for(const S of STALLS){const d=Math.hypot(S.spot.x-p.x,S.spot.z-p.z);if(d<bd){bd=d;best=S;}}return best;}
+function nearestSink(){const P=state.player;if(!P)return null;const p=P.root.position;if(p.x<-27.6||p.x>-21.4||p.z>-3.4)return null;let best=null,bd=0.7;for(const s of SINKS()){const d=Math.abs(s.x-p.x);if(d<bd){bd=d;best=s;}}return best;}
+function startRestroom(S){
+  const P=state.player;if(!P||rr.use||rr.wash||P.eating||P.seat)return;
+  if(S.occ){P.say('Occupied. I’ll try another one.',1600);sfx('deny');return;}
+  if(P.held){P.dropHeld();toast('You left your food outside the stall.','',2200);}
+  S.occ='me';S.swing=0.7;rr.use={S,t:0,dur:clamp(3+V.bl*0.05,3,8),hidden:false};P.faceTo(S.spot.x-1,S.spot.z);sfx('door');
+}
+function startWash(s){
+  const P=state.player;if(!P||rr.use||rr.wash||P.eating)return;
+  if(P.held){P.say('Hands full! Put the food down first (Q).',1800);return;}
+  P.root.position.x=s.x;P.heading=Math.PI;rr.wash={t:0,s};sfx('water');
+}
+function endRestroom(){
+  const U=rr.use,P=state.player;if(!U)return;rr.use=null;U.S.occ=null;U.S.swing=0.7;
+  if(P){P.root.visible=true;P.hiddenInStall=false;P.root.position.set(U.S.spot.x+0.95,0,U.S.spot.z);P.heading=Math.PI/2;}
+}
+function updateRestroom(dt){
+  // stall doors: wide open while someone steps in or out, shut while occupied, ajar when free
+  for(const S of STALLS){S.swing=Math.max(0,S.swing-dt);const want=S.swing>0?-1.35:S.occ?0:-0.35;S.ang+=(want-S.ang)*(1-Math.exp(-dt*8));S.pivot.rotation.y=S.ang;S.sign.material=S.occ?STALL_MAT.occ:STALL_MAT.free;
+    if(S.occ&&!reduceMotion&&Math.random()<dt*1.6)spawnP(-28.5,2.0,S.zc+rand(-0.3,0.3),rand(-0.08,0.08),0.45,rand(-0.08,0.08),1.6,0.08,pick(['#7fc4f0','#f2b632','#c9ecf8']),-0.15);}// a little humming from inside
+  const P=state.player,U=rr.use;
+  if(U&&P){U.t+=dt;
+    if(!U.hidden&&U.t>0.35){U.hidden=true;P.root.visible=false;P.hiddenInStall=true;P.root.position.set(U.S.spot.x,0,U.S.spot.z);sfx('lock');if(state.selected===P)closeCard();}
+    if(U.t>=U.dur+0.35){endRestroom();sfx('flush');V.bl=0;V.clean=false;renderVitals();P.say('All done. Now to wash my hands.',2400);}}
+  const W=rr.wash;
+  if(W&&P){W.t+=dt;if(!reduceMotion&&Math.random()<dt*14)spawnP(W.s.x+rand(-0.04,0.04),1.02,-5.75,rand(-0.05,0.05),-0.4,rand(0,0.1),0.45,0.035,Math.random()<0.7?'#9fd8f5':'#ffffff',6);
+    if(W.t>=3){rr.wash=null;V.clean=true;V.hp=vclamp(V.hp+2);renderVitals();P.say('Squeaky clean!',1600);sfx('catch');}}
+}
+const _sv=new THREE.Vector3();
+function updateStallLabels(){
+  for(const S of STALLS){
+    if(!S.label){S.label=document.createElement('div');S.label.className='stall-label';S.label.hidden=true;labels.appendChild(S.label);}
+    const el=S.label,mine=S.occ==='me'&&rr.use&&rr.use.S===S;
+    if(!S.occ||state.mode!=='world'){if(!el.hidden)el.hidden=true;continue;}
+    _sv.set(-27.9,2.35,S.zc);_sv.project(camera);
+    if(_sv.z>1||_sv.z<-1||Math.abs(_sv.x)>1.1||Math.abs(_sv.y)>1.1){el.hidden=true;continue;}
+    const w=stage.clientWidth,h=stage.clientHeight,html=mine?'<span>Using the restroom</span><i class="prog"><b style="width:'+Math.min(100,rr.use.t/(rr.use.dur+0.35)*100).toFixed(0)+'%"></b></i>':'<span>Occupied</span>';
+    if(el._h!==html){el.innerHTML=html;el._h=html;}el.className='stall-label'+(mine?' mine':'');el.hidden=false;
+    el.style.transform='translate('+((_sv.x*0.5+0.5)*w).toFixed(1)+'px,'+((-_sv.y*0.5+0.5)*h).toFixed(1)+'px) translate(-50%,-100%)';
+  }
+}
+// a remote player in a stall: hidden, the stall shows Occupied; frees it when they come out or leave
+function freeStallOf(ch){if(ch.inStall&&ch.inStall.occ===ch.id){ch.inStall.occ=null;ch.inStall.swing=0.7;}ch.inStall=null;}
 
 /* =========================================================
    Player, camera, input
@@ -1092,12 +1217,14 @@ function updatePlayer(dt){
   if(!isTyping()&&!state.modal){if(keys.has('w')||keys.has('arrowup'))iz-=1;if(keys.has('s')||keys.has('arrowdown'))iz+=1;if(keys.has('a')||keys.has('arrowleft'))ix-=1;if(keys.has('d')||keys.has('arrowright'))ix+=1;}
   ix+=joy.x;iz+=joy.y;const len=Math.hypot(ix,iz);if(len>1){ix/=len;iz/=len;}
   const moving=len>0.08;
+  if(rr.use){jumpQueued=false;P.anim.speed=0;return;}
+  if(rr.wash&&(moving||jumpQueued))rr.wash=null;
   if(P.seat){if(moving||jumpQueued){standUp();}else{jumpQueued=false;P.anim.speed=0;return;}}
-  const run=keys.has('shift')||joy.run;
+  const run=(keys.has('shift')||joy.run)&&canRun();
   const fx=-Math.sin(cam.yaw),fz=-Math.cos(cam.yaw),rx=Math.cos(cam.yaw),rz=-Math.sin(cam.yaw);
   let mx=rx*ix+fx*(-iz),mz=rz*ix+fz*(-iz);const ml=Math.hypot(mx,mz);if(ml>1){mx/=ml;mz/=ml;}
   const inWater=cellTop(p.x,p.z)<-0.5&&p.y<-0.4;
-  const spd=(run?5.6:3.0)*(inWater?0.55:1);
+  const spd=(run?5.6:3.0)*(inWater?0.55:1)*vitalSpeed();
   const dx=mx*spd*dt,dz=mz*spd*dt,ox=p.x,oz=p.z;
   if(dx&&!blocked(p.x+dx,p.z,p.y))p.x+=dx;
   if(dz&&!blocked(p.x,p.z+dz,p.y))p.z+=dz;
@@ -1107,7 +1234,7 @@ function updatePlayer(dt){
   jumpQueued=false;
   P.vy-=22*dt;p.y+=P.vy*dt;const g=supportY(p.x,p.z);
   if(p.y<=g){if(!P.onGround){if(g<-0.5&&P.vy<-3){burst(p.x,-0.2,p.z,14,['#d7eefc','#8fd0f5','#ffffff'],2,0.08);sfx('splash');}else if(P.vy<-4)sfx('land');}p.y=g;P.vy=0;P.onGround=true;}else if(p.y-g>0.05)P.onGround=false;
-  P.anim.speed=moving?spd*Math.min(1,len):0;P.anim.run=run&&moving;P.anim.air=!P.onGround;P.anim.pose='stand';
+  P.anim.speed=moving?spd*Math.min(1,len):0;P.anim.run=run&&moving;P.anim.air=!P.onGround;P.anim.pose=rr.wash?'wash':'stand';
 }
 function blocked(x,z,y){const r=0.28;for(const o of [[-r,-r],[r,-r],[-r,r],[r,r]]){if(cellTop(x+o[0],z+o[1])>y+0.55)return true;}return false;}
 function supportY(x,z){const r=0.2;let m=-99;for(const o of [[-r,-r],[r,-r],[-r,r],[r,r],[0,0]])m=Math.max(m,cellTop(x+o[0],z+o[1]));return m;}
@@ -1121,10 +1248,13 @@ function standUp(){const P=state.player,s=P.seat;if(!s)return;s.occ=null;P.seat=
 function tryInteract(){
   if(state.mode!=='world'||state.modal)return;const P=state.player;if(!P)return;
   if(P.seat){standUp();return;}
+  if(rr.use||rr.wash)return;
   if(P.root.position.distanceTo(BOARD_POS)<3.2){openBoard();return;}
   if(P.eating)return;
   const ci=nearestCounterItem();if(ci>=0){holdFood(menu.items[ci]);return;}
   if(nearCoffee()){startBrew();return;}
+  const sk=nearestSink();if(sk){startWash(sk);return;}
+  const st=nearestStall();if(st){startRestroom(st);return;}
   const s=nearestSeat();if(s){sitOn(s);return;}
   const o=nearestOtherDesk();if(o){P.say('That’s '+deskOwnerName(o)+'’s desk.',1800);sfx('deny');}
 }
@@ -1648,7 +1778,7 @@ function syncDesks(){
   const want=new Map();for(const k in USERS){const u=USERS[k];if(u.deskSlot>=0&&u.deskSlot<DESK_SLOTS.length)want.set(u.deskSlot,{k,cfg:deskOf(u)});}
   DESK_SLOTS.forEach((S,i)=>{const w=want.get(i),sig=w?w.k+'|'+deskToArr(w.cfg).join():'';if(S.sig===sig)return;if(w)placeDesk(i,w.cfg,w.k);else clearDesk(i);});
 }
-function removeLocal(ch){ch.dispose();state.chars.delete(ch.id);if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;const i=locals.indexOf(ch);if(i>=0)locals.splice(i,1);if(state.selected===ch)closeCard();}
+function removeLocal(ch){freeStallOf(ch);ch.dispose();state.chars.delete(ch.id);if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;const i=locals.indexOf(ch);if(i>=0)locals.splice(i,1);if(state.selected===ch)closeCard();}
 // offline people sit Away at their own desk (or a free bench when they have none)
 function seatAway(ch){
   if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=null;
@@ -1664,7 +1794,7 @@ function syncPeople(){
     if(!ch){ch=new Character({id:'local:'+k,kind,data:u});ch.avSig=avatarToArr(u.avatar).join();state.chars.set(ch.id,ch);locals.push(ch);
       if(kind==='local')seatAway(ch);else ch.root.position.set(SPAWN.x,0,SPAWN.z);continue;}
     ch.data=u;const sig=avatarToArr(u.avatar).join();if(sig!==ch.avSig){ch.avSig=sig;ch.setAvatar(u.avatar);}
-    if(kind!==ch.kind){ch.kind=kind;if(kind==='local'){ch.net=null;ch.netAir=false;ch.dropHeld();ch.anim.eat=null;seatAway(ch);}}
+    if(kind!==ch.kind){ch.kind=kind;if(kind==='local'){ch.net=null;ch.netAir=false;ch.dropHeld();ch.anim.eat=null;if(ch.inStall){freeStallOf(ch);ch.hiddenInStall=false;}seatAway(ch);}}
     else if(kind==='local'){const D=DESK_SLOTS[u.deskSlot];if(D&&ch.spot!==D.spot)seatAway(ch);}
     ch.refresh();
   }
@@ -1672,19 +1802,22 @@ function syncPeople(){
 function applyNetState(k,s){if(k===myKey()||!s||typeof s!=='object')return;const ch=state.chars.get('local:'+k);if(ch&&ch.kind==='remote')ch.net=s;}
 // remote players glide towards their last reported position; seats, held food, eating and waves are mirrored
 function stepRemote(ch,dt){
-  const n=ch.net,p=ch.root.position,seat=n.seat?SPOTS.find(s=>s.id===n.seat):null;
+  const n=ch.net,p=ch.root.position,seat=n.seat?SPOTS.find(s=>s.id===n.seat):null,stall=Number.isInteger(n.stall)?STALLS[n.stall]:null;
+  if(stall){if(ch.inStall!==stall){freeStallOf(ch);ch.inStall=stall;if(!stall.occ)stall.occ=ch.id;stall.swing=0.7;if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=null;}
+    ch.root.visible=false;ch.hiddenInStall=true;ch.anim.speed=0;p.x=stall.spot.x;p.z=stall.spot.z;ch.dropHeld();if(state.selected===ch)closeCard();return;}
+  if(ch.inStall){freeStallOf(ch);ch.root.visible=true;ch.hiddenInStall=false;}
   if(seat){if(ch.spot!==seat){if(ch.spot&&ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=seat;if(!seat.occ)seat.occ=ch.id;placeAt(ch,seat);}ch.anim.speed=0;}
   else{
     if(ch.spot){if(ch.spot.occ===ch.id)ch.spot.occ=null;ch.spot=null;ch.anim.pose='stand';ch.root.visible=true;ch.hiddenInStall=false;}
     const x=+n.x||0,z=+n.z||0,dx=x-p.x,dz=z-p.z;if(Math.hypot(dx,dz)>8){p.x=x;p.z=z;}else{const f=1-Math.exp(-dt*10);p.x+=dx*f;p.z+=dz*f;}
-    ch.baseY=+n.y||0;ch.heading=+n.h||0;ch.anim.speed=clamp(+n.spd||0,0,8);ch.anim.run=!!n.run;ch.netAir=!!n.air;
+    ch.baseY=+n.y||0;ch.heading=+n.h||0;ch.anim.speed=clamp(+n.spd||0,0,8);ch.anim.run=!!n.run;ch.netAir=!!n.air;ch.anim.pose=n.act==='wash'?'wash':'stand';
   }
   const held=FOOD[n.held]?n.held:null;if(held!==(ch.held||null)){if(held)ch.hold(held);else ch.dropHeld();}
   ch.anim.eat=n.eat==='eat'||n.eat==='drink'?n.eat:null;
   if(n.wave!==ch.netWave){if(ch.netWave!=null)ch.anim.wave=1.4;ch.netWave=n.wave;}
 }
 function myNetState(){const P=state.player,p=P.root.position,r=v=>Math.round(v*100)/100;
-  return{x:r(p.x),y:r(p.y),z:r(p.z),h:r(P.heading),spd:r(P.anim.speed),run:!!P.anim.run,air:!P.onGround,seat:P.seat?P.seat.id:null,held:P.held||null,eat:P.anim.eat||null,wave:room.waveN};}
+  return{x:r(p.x),y:r(p.y),z:r(p.z),h:r(P.heading),spd:r(P.anim.speed),run:!!P.anim.run,air:!P.onGround,seat:P.seat?P.seat.id:null,held:P.held||null,eat:P.anim.eat||null,wave:room.waveN,stall:rr.use?rr.use.S.i:null,act:rr.wash?'wash':null};}
 function updateRoom(dt){
   if(!room.mode||state.mode!=='world'||!state.player)return;
   room.sendT-=dt;room.keepAlive-=dt;
@@ -1918,6 +2051,7 @@ function enterWorld(rec){
   const myHad=rec.deskSlot;
   if(room.mode!=='guest'){let changed=false;for(const k in USERS){const u=USERS[k],had=u.deskSlot;allocDesk(u);if(u.deskSlot!==had)changed=true;}if(changed){saveUsers();if(!room.mode)state.cookieOK=writeProfileCookie(rec);}}
   if(room.mode==='host')setOnline(kOf(rec),true);
+  rr.use=null;rr.wash=null;loadVitals(rec);
   syncDesks();syncPeople();
   resumeWorld();renderMe();renderFeed();drawBoard();renderRoomBtn();lastZone='';
   if(rec.deskSlot!==myHad)setTimeout(()=>toast(rec.deskSlot>=0?'Your desk is in the Work Desks room: <b>'+esc(deskLabel(rec))+'</b>. It’s the gold square on your map.':'All '+DESK_SLOTS.length+' desks are taken, so you don’t have a desk yet.','',5200),1400);
@@ -1929,8 +2063,9 @@ function enterWorld(rec){
 function resumeWorld(){state.mode='world';applyViewOffset();$('#screen-login').hidden=true;$('#screen-setup').hidden=true;$('#hud').hidden=false;$('#hint').hidden=state.hintHidden;cvs.focus({preventScroll:true});}
 function leaveWorld(){
   const k=myKey();if(room.mode==='host'&&k)setOnline(k,false);else if(room.mode==='guest')roomSend({t:'logout'});
+  saveVitals();endRestroom();rr.wash=null;
   closeCard();if(state.player){if(state.player.seat)state.player.seat.occ=null;state.player.dispose();state.chars.delete('me');state.player=null;}
-  for(const l of locals.splice(0)){l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
+  for(const l of locals.splice(0)){freeStallOf(l);l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
   state.me=null;keys.clear();showLogin();
 }
 function logout(){
@@ -1946,7 +2081,7 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frameN++;
   if(state.mode==='world')updatePlayer(dt);
   for(const ch of state.chars.values())ch.update(dt);
-  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);updateRoom(dt);
+  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);updateRoom(dt);updateVitals(dt);updateRestroom(dt);
   for(const S of DESK_SLOTS)if(S.desk)animateDesk(S.desk,now/1000,dt);
   waterTex.offset.x+=dt*0.015;waterTex.offset.y+=dt*0.008;
   for(const c of clouds){c.position.x+=c.userData.v*dt;if(c.position.x>100)c.position.x=-100;}
@@ -1956,7 +2091,7 @@ function frame(now){
     selRing.visible=s.root.visible;selRing.position.set(p.x,gy+0.04,p.z);selRing.rotation.z+=dt*0.8;}else selRing.visible=false;
   updateCamera(dt);
   renderer.render(scene,camera);
-  updateLabels();
+  updateLabels();updateStallLabels();
   if(state.mode==='world'){
     if(frameN%3===0)drawMinimap();
     uiT+=dt;if(uiT>0.4){uiT=0;renderZone();
@@ -1965,11 +2100,16 @@ function frame(now){
       const kh=coarse?'Tap <span class="key">Use</span>':'Press <span class="key">E</span>';
       const fk=coarse?'Tap <span class="key">Eat</span>':'Press <span class="key">F</span>';
       if(P&&!state.modal){let s,o,ci;const hf=P.held&&FOOD[P.held],eatMsg=hf?fk+' to '+(isDrink(hf)?'drink':'eat')+' '+esc(hf.name):'';
-        if(P.eating)msg=isDrink(P.eating.f)?'Drinking…':'Eating…';
-        else if(P.seat)msg=kh+' or move to stand up'+(hf?' · '+eatMsg:'');
+        let sk,st;
+        if(rr.use)msg='In the restroom…';
+        else if(rr.wash)msg='Washing your hands…';
+        else if(P.eating)msg=isDrink(P.eating.f)?'Drinking…':'Eating…';
+        else if(P.seat)msg=(P.seat.desk?'Working · ':'Resting · ')+kh+' or move to stand up'+(hf?' · '+eatMsg:'');
         else if(P.root.position.distanceTo(BOARD_POS)<3.2)msg=kh+' to read the Orchard Board';
         else if((ci=nearestCounterItem())>=0){const f=FOOD[menu.items[ci]];msg=kh+' to take '+esc(f.name)+' <span class="cat '+f.cat+'">'+FOOD_CATS[f.cat]+'</span>';}
         else if(nearCoffee())msg=brew.on?'Brewing your coffee…':kh+' to grab a cup of coffee';
+        else if((sk=nearestSink()))msg=kh+' to wash your hands'+(V.clean?'':' <span class="cat drink">Needed</span>');
+        else if((st=nearestStall()))msg=st.occ?'Occupied · try another stall':kh+' to use the restroom';
         else if((s=nearestSeat()))msg=kh+(s.desk?' to sit at your desk':' to sit')+(hf?' and '+(isDrink(hf)?'drink':'eat'):'');
         else if((o=nearestOtherDesk()))msg=esc(deskOwnerName(o))+'’s desk · only they can sit here';
         else if(hf)msg=eatMsg+(coarse?'':' · <span class="key">Q</span> put it down');}
