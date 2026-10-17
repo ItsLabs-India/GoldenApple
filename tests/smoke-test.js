@@ -4,7 +4,7 @@
 const fs = require('fs');
 let src = fs.readFileSync(require('path').join(__dirname, '..', 'js', 'app.js'), 'utf8');
 // test-only instrumentation: expose internals right before the IIFE closes
-src = src.replace(/\}\)\(\);\s*$/, 'window.__ga={state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,npcs,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile};\n})();');
+src = src.replace(/\}\)\(\);\s*$/, 'window.__ga={state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile};\n})();');
 
 const errors = [];
 // ---------- tiny DOM ----------
@@ -95,6 +95,15 @@ const realPerf = performance; Object.defineProperty(global, 'performance', { val
 function frames(n, dtMs) { for (let i = 0; i < n; i++) { now += dtMs; const cb = rafCb; rafCb = null; if (!cb) throw new Error('loop stopped (no rAF scheduled)'); cb(now); } }
 const ok = (cond, msg) => { if (!cond) { errors.push('FAIL: ' + msg); console.log('  ✗', msg); } else console.log('  ✓', msg); };
 
+// a profile saved by the old build, still holding apples and pokes from the removed demo coworkers
+const t0 = Date.now();
+store.ga_users = JSON.stringify({ 'old@example.com': { email: 'old@example.com', name: 'Old Timer', role: 'Ops', team: 'Ops', status: 'available', avatar: { skin: 0, hairStyle: 0, hair: 0, eyes: 0, top: 0, topColor: 0, pants: 0, shoes: 0, acc: 0 },
+  received: 12, goldenAt: t0, createdAt: t0, given: null,
+  recent: [{ from: 'Priya Nair', count: 3, reason: 'Helping hand', note: '', at: t0 }, { from: 'Real Person', count: 1, reason: 'Team player', note: '', at: t0 }],
+  inbox: [{ type: 'apple', from: 'Priya Nair', fromId: 'npc:priya', count: 3, reason: 'Helping hand', at: t0, read: false }, { type: 'poke', from: 'Kenji Watanabe', fromId: 'npc:kenji', msg: 'Lunch?', at: t0, read: false },
+    { type: 'apple', from: 'Real Person', fromId: 'local:real@example.com', count: 1, reason: 'Team player', at: t0, read: true }] } });
+store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: [{ kind: 'golden', to: 'Old Timer', at: t0 }, { kind: 'apple', from: 'Priya Nair', to: 'Old Timer', count: 3, reason: 'Helping hand', at: t0 }, { kind: 'apple', from: 'Arjun Mehta', to: 'Fatima Zahra', count: 1, reason: 'Problem solver', at: t0 }] });
+
 (async () => {
   try {
     eval(src);
@@ -102,7 +111,16 @@ const ok = (cond, msg) => { if (!cond) { errors.push('FAIL: ' + msg); console.lo
   const G = window.__ga;
   console.log('Boot');
   ok(G.state.mode === 'login', 'starts on login screen');
-  ok(G.npcs.length === 9, '9 demo coworkers spawned');
+  ok(G.state.chars.size === 0, 'no demo coworkers spawned (world is empty until real people log in)');
+
+  console.log('Old demo data is purged from saved profiles');
+  const old = G.USERS()['old@example.com'];
+  ok(G.WORLD().v === 2 && !G.WORLD().npc, 'world upgraded to v2 without demo coworkers');
+  ok(G.WORLD().feed.length === 0, 'feed items involving demo coworkers removed (and the golden entry they earned)');
+  ok(old.received === 9 && !G.isGolden(old.received) && old.goldenAt === null, 'demo apples subtracted (12→9), Golden status earned from them revoked');
+  ok(old.inbox.length === 1 && old.inbox[0].from === 'Real Person', 'demo apples and pokes removed from inbox, real ones kept');
+  ok(old.recent.length === 1 && old.recent[0].from === 'Real Person', 'demo entries removed from recent apples');
+  ok(JSON.parse(store.ga_users)['old@example.com'].received === 9, 'purge is saved to localStorage');
   const seats = G.SPOTS.filter(s => s.pose === 'sit');
   console.log('  spots:', G.SPOTS.length, 'seats:', seats.length, 'desk seats:', G.SPOTS.filter(s => s.desk).length);
   frames(120, 16);
@@ -120,7 +138,7 @@ const ok = (cond, msg) => { if (!cond) { errors.push('FAIL: ' + msg); console.lo
     }
   }
   console.log('  samples checked:', checked, 'blocked segments:', bad); badEx.forEach(s => console.log('   ', s));
-  ok(bad === 0, 'no NPC route crosses a solid cell');
+  ok(bad === 0, 'no spot-to-spot route crosses a solid cell');
   // seats must have a walkable approach point for the player to stand up onto
   const badApproach = seats.filter(s => s.approach && G.cellTop(s.approach.x, s.approach.z) > 0.55);
   badApproach.slice(0, 5).forEach(s => console.log('   approach blocked', s.zone, s.x, s.z, '->', s.approach.x, s.approach.z, G.cellTop(s.approach.x, s.approach.z)));
@@ -151,43 +169,43 @@ const ok = (cond, msg) => { if (!cond) { errors.push('FAIL: ' + msg); console.lo
   keysDown(' '); frames(5, 16); ok(G.state.player.root.position.y > 0, 'Space makes the player jump'); frames(80, 16);
   ok(Math.abs(G.state.player.root.position.y) < 1e-6, 'player lands back on the ground');
   for (let i = 0; i < 4 * 60 * 20; i++) frames(1, 50);
-  ok(true, 'ran 4800 frames with NPCs walking, gifting and poking');
-  const walked = G.npcs.filter(n => n.state === 'walk' || n.spot).length;
-  ok(walked === 9, 'all NPCs are either walking or at a spot');
-  const occ = {}; let dup = 0; for (const n of G.npcs) { const s = n.spot || n.target; if (s) { if (occ[s.id]) dup++; occ[s.id] = 1; } } ok(dup === 0, 'no two NPCs share a spot');
+  ok(true, 'ran 4800 frames');
+  ok((G.state.me.inbox || []).length === 0 && G.WORLD().feed.length === 0, 'nobody fake gifted or poked you while idle');
 
   console.log('Apples & Golden Apple');
-  const meera = G.npcs.find(n => n.id === 'meera').ch;
+  const oldCh = G.state.chars.get('local:old@example.com');
+  ok(!!oldCh && oldCh.kind === 'local', 'the other real profile on this browser is in the world as Away');
   const me = G.state.me; me.given = null; // reset budget for a deterministic test
-  const before = meera.data.received; meera.data.received = 10;
+  oldCh.data.received = 10;
   ok(!G.isGolden(10) && G.isGolden(11), 'threshold: 10 is not golden, 11 is');
-  const r1 = G.giveApples(G.state.player, meera, 3, 'Problem solver', 'Great catch');
-  ok(r1 && r1.became === true && meera.data.received === 13, 'giving 3 apples to Meera (10→13) makes her a Golden Apple');
+  const r1 = G.giveApples(G.state.player, oldCh, 3, 'Problem solver', 'Great catch');
+  ok(r1 && r1.became === true && oldCh.data.received === 13, 'giving 3 apples to Old Timer (10→13) makes them a Golden Apple');
   ok(G.budgetLeft(me) === 7, 'giver budget drops to 7/10');
-  ok(G.giveApples(G.state.player, meera, 8, 'Team player', '') === false, 'cannot give 8 when only 7 left');
+  ok(G.giveApples(G.state.player, oldCh, 8, 'Team player', '') === false, 'cannot give 8 when only 7 left');
   ok(G.giveApples(G.state.player, G.state.player, 1, 'Team player', '') === false, 'cannot give apples to yourself');
-  ok(!!G.giveApples(G.state.player, meera, 7, 'Team player', ''), 'can give the remaining 7');
+  ok(!!G.giveApples(G.state.player, oldCh, 7, 'Team player', ''), 'can give the remaining 7');
   ok(G.budgetLeft(me) === 0, 'budget is now 0/10');
   me.given = { d: '2000-01-01', n: 10 }; ok(G.budgetLeft(me) === 10, 'budget refills on a new day');
   ok(G.WORLD().feed[0].kind === 'apple' || G.WORLD().feed[0].kind === 'golden', 'feed records the gift');
-  G.openCard(meera); G.renderCard(); G.openBoard(); G.openInbox(); G.openMenu(false); G.openMenu(true);
+  G.openCard(oldCh); G.renderCard(); G.openBoard(); G.openInbox(); G.openMenu(false); G.openMenu(true);
   ok(true, 'card, board, inbox and menu render without errors');
-  G.doPoke(G.state.player, meera, 'Coffee break?');
+  G.doPoke(G.state.player, oldCh, 'Coffee break?');
   await new Promise(r => setTimeout(r, 2500)); frames(60, 16);
-  ok(true, 'poke animation + NPC reply ran');
+  ok(G.USERS()['old@example.com'].inbox.some(i => i.type === 'poke' && i.msg === 'Coffee break?'), 'poke to an Away user lands in their inbox');
 
   console.log('Duplicate email & returning user');
   G.logout();
   ok(G.state.mode === 'login' && !cookieJar.ga_session, 'logout clears session cookie');
   email.value = 'tester@example.com'; getEl('#loginForm').dispatch('submit');
   ok(G.state.mode === 'world' && G.state.me.name === 'Test User', 'same email logs straight back in (no duplicate profile)');
-  ok(Object.keys(G.USERS()).length === 1, 'still exactly one profile for that email');
+  ok(Object.keys(G.USERS()).filter(k => k === 'tester@example.com').length === 1 && Object.keys(G.USERS()).length === 2, 'still exactly one profile for that email');
   // second user on the same browser shows up as Away
   G.logout(); email.value = 'second@example.com'; getEl('#loginForm').dispatch('submit');
   getEl('#pName').value = 'Second'; getEl('#setupForm').dispatch('submit');
   const away = [...G.state.chars.values()].filter(c => c.kind === 'local');
-  ok(away.length === 1 && away[0].data.name === 'Test User', 'other profile on this browser appears as Away');
-  G.state.me.given = null; G.giveApples(G.state.player, away[0], 2, 'Helping hand', 'Thanks!');
+  const tester = away.find(c => c.data.name === 'Test User');
+  ok(away.length === 2 && !!tester && G.state.chars.size === 3, 'other profiles on this browser appear as Away, and nobody else');
+  G.state.me.given = null; G.giveApples(G.state.player, tester, 2, 'Helping hand', 'Thanks!');
   ok((G.USERS()['tester@example.com'].inbox || []).some(i => i.type === 'apple' && i.count === 2), 'apples to an Away user land in their inbox');
   // cookie-only recovery: wipe localStorage, keep cookies
   for (const k of Object.keys(store)) delete store[k];

@@ -8,13 +8,13 @@
      pixel apple icons ................ 2D pixel-art icons used in the UI
      Storage .......................... cookie (primary) + localStorage mirror
      avatar options ................... skin, hair, clothes, accessories
-     Data model ....................... users, demo coworkers, feed
+     Data model ....................... users, feed
      Three.js core .................... renderer, scene, camera, lights
      textures ......................... procedural block texture atlas
      World layout ..................... zones, paths, lake, furniture, trees
      Avatars .......................... 64x64 skin painter + block figure
      Characters ....................... animation, nameplates, speech
-     NPC brains ....................... where demo coworkers walk next
+     Walk routes ...................... spot-to-spot paths (layout check)
      Effects .......................... particles, flying apples, rings
      Player, camera, input ............ movement, collision, mouse/touch
      Labels ........................... nameplates + speech bubbles
@@ -123,39 +123,26 @@ function putUser(rec){USERS[rec.email]=rec;saveUsers();state.cookieOK=writeProfi
 const budgetLeft=d=>d.given&&d.given.d===todayKey()?Math.max(0,DAILY_APPLES-d.given.n):DAILY_APPLES;
 function spendBudget(d,n){const t=todayKey();if(!d.given||d.given.d!==t)d.given={d:t,n:0};d.given.n+=n;}
 
-const NPC_SEEDS=[
-  {id:'priya',name:'Priya Nair',role:'Product Manager',team:'Payments',status:'meeting',av:[2,3,0,0,3,4,1,0,0],rc:14},
-  {id:'arjun',name:'Arjun Mehta',role:'Frontend Engineer',team:'Web Platform',status:'focus',av:[3,0,0,1,1,5,0,1,3],rc:6},
-  {id:'meera',name:'Meera Iyer',role:'QA Lead',team:'Quality',status:'available',av:[4,4,1,0,4,1,3,2,1],rc:10},
-  {id:'daniel',name:'Daniel Okafor',role:'Data Analyst',team:'Insights',status:'available',av:[6,1,0,1,2,0,0,0,0],rc:4},
-  {id:'sofia',name:'Sofia Lindqvist',role:'UX Researcher',team:'Design',status:'break',av:[0,3,4,2,0,2,2,1,0],rc:7},
-  {id:'kenji',name:'Kenji Watanabe',role:'Backend Engineer',team:'Core Services',status:'focus',av:[1,2,0,1,1,8,1,3,1],rc:2},
-  {id:'fatima',name:'Fatima Zahra',role:'Customer Success',team:'Support',status:'available',av:[3,5,1,0,3,6,5,2,0],rc:12},
-  {id:'rahul',name:'Rahul Krishnan',role:'DevOps Engineer',team:'Infrastructure',status:'meeting',av:[5,0,0,0,0,3,0,0,4],rc:5},
-  {id:'lena',name:'Lena Brooks',role:'People Partner',team:'People',status:'available',av:[1,5,3,3,4,9,4,0,0],rc:3}
-];
 const REASONS=['Team player','Problem solver','Above & beyond','Helping hand','Creative spark','Customer hero','Great mentor'];
 const POKES=['Hey there!','Coffee break?','Stand-up in 5','Lunch?','Nice work today','Got a minute?'];
-const REPLIES={'Hey there!':['Hey {n}!','Oh hi {n}!'],'Coffee break?':['Coffee sounds great.','Give me five minutes!'],'Stand-up in 5':['On my way.','Thanks for the nudge!'],'Lunch?':['Yes! 1 pm?','Biryani again?'],'Nice work today':['Thanks, you too!','That means a lot.'],'Got a minute?':['Sure, what’s up?','After this call?']};
-const THANKS=['Thank you, {n}!','Aw, thanks {n}!','That made my day.','Thanks {n}, appreciated!'];
-const NOTES={'Team player':['Covered for me on the release.','Always jumps in when we are stuck.'],'Problem solver':['Found the root cause in minutes.','Untangled that flaky test.'],'Above & beyond':['Stayed late to ship the fix.','Turned the demo around overnight.'],'Helping hand':['Walked me through the new setup.','Saved my afternoon with that review.'],'Creative spark':['Loved the new onboarding flow.','That workshop idea was brilliant.'],'Customer hero':['Calmed down a very upset client.','Great customer call today.'],'Great mentor':['Patient, clear feedback every time.','Helped me prep for my first talk.']};
 const STATUS={available:{label:'Available',v:'--st-available'},focus:{label:'Focused',v:'--st-focus'},meeting:{label:'In a meeting',v:'--st-meeting'},break:{label:'On a break',v:'--st-break'},away:{label:'Away',v:'--st-away'}};
 
-function seedWorld(){
-  const now=Date.now(),m=60000;
-  const npc={};NPC_SEEDS.forEach(s=>{npc[s.id]={received:s.rc,given:null,recent:[],goldenAt:isGolden(s.rc)?now-864e5*3:null};});
-  npc.meera.recent=[{from:'Priya Nair',count:1,reason:'Helping hand',note:'Walked me through the new setup.',at:now-6*m}];
-  npc.daniel.recent=[{from:'Fatima Zahra',count:2,reason:'Customer hero',note:'Great customer call today.',at:now-14*m}];
-  npc.priya.recent=[{from:'Sofia Lindqvist',count:1,reason:'Creative spark',note:'Loved the new onboarding flow.',at:now-31*m}];
-  npc.fatima.recent=[{from:'Arjun Mehta',count:1,reason:'Problem solver',note:'Untangled that flaky test.',at:now-52*m}];
-  return{v:1,npc,feed:[
-    {kind:'apple',from:'Priya Nair',to:'Meera Iyer',count:1,reason:'Helping hand',at:now-6*m},
-    {kind:'apple',from:'Fatima Zahra',to:'Daniel Okafor',count:2,reason:'Customer hero',at:now-14*m},
-    {kind:'apple',from:'Sofia Lindqvist',to:'Priya Nair',count:1,reason:'Creative spark',at:now-31*m},
-    {kind:'apple',from:'Arjun Mehta',to:'Fatima Zahra',count:1,reason:'Problem solver',at:now-52*m}
-  ]};
+// v1 worlds held 9 demo coworkers. v2 holds real people only, so strip the demo apples, pokes and feed items once.
+function purgeDemo(){
+  const byName=new Map(Object.values(USERS).map(u=>[u.name,u]));
+  for(const email in USERS){
+    const u=USERS[email],demo=new Set();let minus=0;
+    u.inbox=(u.inbox||[]).filter(it=>{if(!String(it.fromId||'').startsWith('npc:'))return true;demo.add(it.from);if(it.type==='apple')minus+=it.count||0;return false;});
+    if(!demo.size)continue;
+    u.recent=(u.recent||[]).filter(r=>!demo.has(r.from));
+    u.received=Math.max(0,(u.received||0)-minus);if(!isGolden(u.received))u.goldenAt=null;
+    writeProfileCookie(u);
+  }
+  saveUsers();
+  const old=Store.get('ga_world',null),feed=old&&Array.isArray(old.feed)?old.feed:[];
+  return{v:2,feed:feed.filter(f=>byName.has(f.to)&&(!f.from||byName.has(f.from))&&(f.kind!=='golden'||isGolden(byName.get(f.to).received)))};
 }
-let WORLD=Store.get('ga_world',null);if(!WORLD||WORLD.v!==1)WORLD=seedWorld();
+let WORLD=Store.get('ga_world',null);if(!WORLD||WORLD.v!==2)WORLD=purgeDemo();
 const saveWorld=()=>Store.set('ga_world',WORLD);
 saveWorld();
 
@@ -698,10 +685,9 @@ class Character{
   dispose(){scene.remove(this.root);this.av.disposables.forEach(d=>d.dispose());this.tag.remove();if(this.bubble)this.bubble.remove();}
 }
 
-/* ---------- NPC brains ---------- */
-const NPC_WEIGHTS=[['desks',0.5],['pantry',0.22],['lake',0.18],['restroom',0.1]];
-const NPC_DUR={desks:[25,60],pantry:[12,26],lake:[15,34],restroom:[6,12]};
-const npcs=[];
+/* ---------- walk routes ----------
+   routeFromTo is no longer used in play; tests/smoke-test.js walks every spot-to-spot route to prove the
+   layout stays connected through doors and gaps after furniture changes. */
 function routeFromTo(a,b){
   const pts=[];
   if(a){for(let i=a.via.length-1;i>=0;i--)pts.push(a.via[i]);}
@@ -711,57 +697,14 @@ function routeFromTo(a,b){
   for(const p of b.via)pts.push(p);
   pts.push({x:b.x,z:b.z});return pts;
 }
-function freeSpot(zone,exclude){const list=SPOTS.filter(s=>s.zone===zone&&!s.occ&&s!==exclude&&!(s.desk&&s.reserved));return list.length?pick(list):null;}
 function placeAt(ch,spot){
   ch.root.position.set(spot.x,0,spot.z);ch.heading=spot.face;ch.root.rotation.y=spot.face;
   ch.anim.pose=spot.pose==='stall'?'stand':spot.pose;ch.anim.speed=0;
   ch.baseY=spot.pose==='sit'?spot.y-HIP:0;ch.root.position.y=ch.baseY;
   const hide=spot.pose==='stall';ch.root.visible=!hide;ch.hiddenInStall=hide;
 }
-function npcPickNext(n){
-  const from=n.spot;let to=null;
-  // after a stall visit, wash hands
-  if(from&&from.pose==='stall')to=SPOTS.find(s=>s.zone==='restroom'&&s.pose==='wash'&&!s.occ)||null;
-  if(!to){
-    let zone='desks';const r=Math.random();let acc=0;for(const [z,w] of NPC_WEIGHTS){acc+=w;if(r<=acc){zone=z;break;}}
-    if(zone==='desks'&&n.home&&n.home!==from&&!n.home.occ)to=n.home;
-    if(!to)to=freeSpot(zone,from);
-  }
-  if(!to||to===from){n.timer=rand(5,12);return;}
-  if(from)from.occ=null;to.occ=n.id;
-  n.route=routeFromTo(from,to);n.wp=0;n.target=to;n.spot=null;n.state='walk';
-  n.speed=Math.random()<0.12?4.2:rand(1.9,2.4);
-  const ch=n.ch;ch.anim.pose='stand';ch.baseY=0;ch.root.visible=true;ch.hiddenInStall=false;
-}
-function npcArrive(n){const s=n.target;n.spot=s;n.state='idle';placeAt(n.ch,s);const d=NPC_DUR[s.zone]||[10,20];n.timer=rand(d[0],d[1]);}
-function npcThink(n,dt){
-  const ch=n.ch;
-  if(n.pauseT>0){n.pauseT-=dt;ch.anim.speed=0;return;}
-  if(n.state==='walk'){
-    const wp=n.route[n.wp],p=ch.root.position;const dx=wp.x-p.x,dz=wp.z-p.z,d=Math.hypot(dx,dz),step=n.speed*dt;
-    if(d<=step){p.x=wp.x;p.z=wp.z;n.wp++;if(n.wp>=n.route.length){npcArrive(n);return;}}
-    else{p.x+=dx/d*step;p.z+=dz/d*step;ch.heading=Math.atan2(dx,dz);}
-    ch.anim.speed=n.speed;ch.anim.run=n.speed>3;
-  }else{ch.anim.speed=0;ch.anim.run=false;n.timer-=dt;if(n.timer<=0)npcPickNext(n);}
-}
-
 /* ---------- people registry ---------- */
 const allPeople=()=>[...state.chars.values()];
-function spawnNPCs(){
-  const desks=SPOTS.filter(s=>s.desk);
-  NPC_SEEDS.forEach((s,i)=>{
-    const w=WORLD.npc[s.id]||(WORLD.npc[s.id]={received:s.rc,given:null,recent:[],goldenAt:null});
-    const data={id:s.id,name:s.name,role:s.role,team:s.team,status:s.status,avatar:arrToAvatar(s.av),get received(){return w.received;},set received(v){w.received=v;},get given(){return w.given;},set given(v){w.given=v;},get recent(){return w.recent;},set recent(v){w.recent=v;},get goldenAt(){return w.goldenAt;},set goldenAt(v){w.goldenAt=v;}};
-    const ch=new Character({id:'npc:'+s.id,kind:'npc',data});
-    state.chars.set(ch.id,ch);
-    const home=desks[(i*5+2)%desks.length];home.reserved=true;
-    const n={ch,home,spot:null,target:null,route:[],wp:0,state:'idle',timer:rand(3,26),speed:2,pauseT:0,id:s.id};
-    let start=home;
-    if(Math.random()<0.4){const z=pick(['pantry','lake','restroom']);const fs=freeSpot(z);if(fs&&fs.pose!=='stall')start=fs;}
-    start.occ=s.id;n.spot=start;placeAt(ch,start);npcs.push(n);ch.npc=n;
-  });
-}
-spawnNPCs();
 
 /* =========================================================
    Effects
@@ -944,11 +887,10 @@ function zoneAt(x,z){
    Recognition logic: apples, pokes, Golden Apple
    ========================================================= */
 function persistData(ch){
-  if(ch.kind==='npc')saveWorld();
-  else{USERS[ch.data.email]=ch.data;saveUsers();if(ch.kind==='me')state.cookieOK=writeProfileCookie(ch.data);}
+  USERS[ch.data.email]=ch.data;saveUsers();if(ch.kind==='me')state.cookieOK=writeProfileCookie(ch.data);
 }
 function pushFeed(item){WORLD.feed.unshift(item);WORLD.feed=WORLD.feed.slice(0,40);saveWorld();renderFeed();}
-function pushInbox(ch,item){if(ch.kind==='npc')return;ch.data.inbox=[Object.assign({at:Date.now(),read:false},item),...(ch.data.inbox||[])].slice(0,50);}
+function pushInbox(ch,item){ch.data.inbox=[Object.assign({at:Date.now(),read:false},item),...(ch.data.inbox||[])].slice(0,50);}
 function giveApples(from,to,count,reason,note){
   const left=budgetLeft(from.data);if(count<1||count>left||from===to)return false;
   spendBudget(from.data,count);
@@ -967,14 +909,12 @@ function giveApples(from,to,count,reason,note){
 }
 function animateGift(from,to,count,became){
   const vis=from.root.visible&&to.root.visible&&from.root.position.distanceTo(to.root.position)<48;
-  if(from.npc&&from.npc.state!=='walk'&&from.anim.pose!=='sit')from.faceTo(to.root.position.x,to.root.position.z);
   if(from===state.player&&!from.seat)from.faceTo(to.root.position.x,to.root.position.z);
   from.anim.give=0.55;
   const finish=()=>{
     const hp=headPos(to);burst(hp.x,hp.y,hp.z,18,['#e0442e','#ff8f6e','#f2b632','#6cbf4c'],2.6,0.1);
     to.anim.celebrate=1.3;to.hop(5.2);
     to.refresh();
-    if(to.kind==='npc'){to.say(pick(THANKS).replace('{n}',from.data.name.split(' ')[0]),2600);if(to.npc){to.npc.pauseT=Math.max(to.npc.pauseT,1.6);}}
     if(became){
       burst(hp.x,hp.y+0.4,hp.z,60,['#f2b632','#ffe08a','#fff6c8'],4,0.13);
       to.crown.scale.setScalar(0.01);growCrown(to);
@@ -1000,32 +940,13 @@ function doPoke(from,to,msg){
     const p=to.root.position;ringWave(p.x,p.y,p.z,0x6fb7e8);const hp=headPos(to);burst(hp.x,hp.y,hp.z,10,['#6fb7e8','#d7eefc','#ffffff'],2,0.08);
     to.anim.startle=0.8;to.hop(4.2);to.say('!',700,'alert');
     setTimeout(()=>to.say(from.data.name.split(' ')[0]+': '+msg,3000),650);
-    if(to.kind==='npc')npcReact(to,from,msg);
-    else if(to.kind==='local'){pushInbox(to,{type:'poke',from:from.data.name,fromId:from.id,msg});persistData(to);}
+    if(to.kind==='local'){pushInbox(to,{type:'poke',from:from.data.name,fromId:from.id,msg});persistData(to);}
     else if(to===state.player){pushInbox(to,{type:'poke',from:from.data.name,fromId:from.id,msg});persistData(to);renderMe();toast('<b>'+esc(from.data.name)+'</b> poked you: '+esc(msg),'',3600,ICON_POKE);}
   };
   const vis=from.root.visible&&to.root.visible&&from.root.position.distanceTo(to.root.position)<48;
   if(!vis){arrive();}else{const o=new THREE.Mesh(UNIT_BOX,new THREE.MeshBasicMaterial({color:0x6fb7e8}));o.scale.setScalar(0.16);const d=from.root.position.distanceTo(to.root.position);fly(o,()=>handPos(from),()=>headPos(to),clamp(0.35+d*0.03,0.4,0.9),0.6+d*0.04,()=>{o.material.dispose();arrive();},'#6fb7e8');}
   if(from===state.player)toast('You poked <b>'+esc(to.data.name)+'</b>: '+esc(msg),'',2200,ICON_POKE);
 }
-function npcReact(ch,from,msg){
-  const n=ch.npc;if(n){n.pauseT=Math.max(n.pauseT,3.2);}
-  if(ch.anim.pose!=='sit'&&!ch.hiddenInStall)ch.faceTo(from.root.position.x,from.root.position.z);
-  setTimeout(()=>{ch.anim.wave=1.4;ch.say((pick(REPLIES[msg]||['Hi!'])).replace('{n}',from.data.name.split(' ')[0]),2800);},1700);
-  if(from===state.player&&Math.random()<0.3)setTimeout(()=>{if(state.player&&state.mode==='world')doPoke(ch,state.player,pick(POKES));},6500);
-}
-
-/* ambient demo life */
-const ambient={npcGift:rand(25,40),toMe:30,pokeMe:rand(110,170)};
-function updateAmbient(dt){
-  if(state.mode!=='world')return;
-  ambient.npcGift-=dt;ambient.toMe-=dt;ambient.pokeMe-=dt;
-  const npcChars=npcs.map(n=>n.ch).filter(c=>c.root.visible);
-  if(ambient.npcGift<=0){ambient.npcGift=rand(60,110);const givers=npcChars.filter(c=>budgetLeft(c.data)>0);if(givers.length>1){const a=pick(givers);const b=pick(npcChars.filter(c=>c!==a));const r=pick(REASONS);giveApples(a,b,Math.random()<0.2?2:1,r,pick(NOTES[r]));}}
-  if(ambient.toMe<=0&&state.player){ambient.toMe=rand(100,180);const givers=npcChars.filter(c=>budgetLeft(c.data)>0);if(givers.length){const a=pick(givers),r=pick(REASONS),note=pick(NOTES[r]);giveApples(a,state.player,1,r,note);toast('<b>'+esc(a.data.name)+'</b> gave you an apple · '+esc(r),'',4200,ICON_APPLE);}}
-  if(ambient.pokeMe<=0&&state.player){ambient.pokeMe=rand(140,240);const a=pick(npcChars);if(a)doPoke(a,state.player,pick(POKES));}
-}
-
 /* =========================================================
    UI rendering
    ========================================================= */
@@ -1064,7 +985,7 @@ function openCard(ch){
 function closeCard(){const s=state.selected;state.selected=null;if(s)s.refresh();card.hidden=true;$('#hud').classList.remove('card-open');}
 function renderCard(){
   const ch=state.selected;if(!ch)return;const d=ch.data,self=ch===state.player,n=d.received||0,left=state.me?budgetLeft(state.me):0;
-  const kindChip=ch.kind==='npc'?'<span class="chip">Demo coworker</span>':ch.kind==='local'?'<span class="chip">Away · same browser</span>':'<span class="chip">This is you</span>';
+  const kindChip=ch.kind==='local'?'<span class="chip">Away · same browser</span>':'<span class="chip">This is you</span>';
   const recent=(d.recent||[]).slice(0,3);
   let h='<div class="card-head"><img class="head xl" src="'+ch.headUrl+'" alt=""><div style="min-width:0"><div class="card-name">'+esc(d.name)+'</div><div class="card-role">'+esc([d.role,d.team].filter(Boolean).join(' · ')||'No role set')+'</div><div class="chips">'+statusChip(d,ch.kind)+(ch.golden?'<span class="gold-chip"><img src="'+ICON_GOLD+'" alt="">Golden Apple</span>':'')+kindChip+'</div></div></div>';
   h+='<div class="fine" id="cardZone">'+(ch.hiddenInStall?'In the Restroom':'At '+esc(zoneAt(ch.root.position.x,ch.root.position.z)))+'</div>';
@@ -1120,7 +1041,7 @@ function openBoard(){
   const items=WORLD.feed.slice(0,14);
   showModal('board','<h2 id="modalTitle">Orchard Board</h2>'
     +'<p class="fine">Recognition from around the office. There is no ranking here: anyone who receives more than '+GOLDEN_AFTER+' apples in total joins the Golden Apples.</p>'
-    +'<section style="display:grid;gap:10px"><h3>Golden Apples ('+golden.length+')</h3>'+(golden.length?'<div class="golden-grid">'+golden.map(c=>'<div class="gcard"><img class="head" src="'+c.headUrl+'" alt=""><div style="min-width:0"><div class="nm">'+esc(c.data.name)+'</div><div class="rl">'+plural(c.data.received,'apple')+(c.kind==='npc'?' · demo':'')+'</div></div></div>').join('')+'</div>':'<p class="empty">Nobody yet.</p>')+'</section>'
+    +'<section style="display:grid;gap:10px"><h3>Golden Apples ('+golden.length+')</h3>'+(golden.length?'<div class="golden-grid">'+golden.map(c=>'<div class="gcard"><img class="head" src="'+c.headUrl+'" alt=""><div style="min-width:0"><div class="nm">'+esc(c.data.name)+'</div><div class="rl">'+plural(c.data.received,'apple')+'</div></div></div>').join('')+'</div>':'<p class="empty">Nobody yet.</p>')+'</section>'
     +'<section style="display:grid;gap:10px"><h3>Recent apples</h3><ol class="list">'+items.map(f=>f.kind==='golden'?'<li style="border-left-color:var(--gold)"><b>'+esc(f.to)+'</b> became a Golden Apple<div class="meta">'+timeAgo(f.at)+'</div></li>':'<li><b>'+esc(f.from)+'</b> gave <b>'+esc(f.to)+'</b> '+plural(f.count,'apple')+' · '+esc(f.reason)+'<div class="meta">'+timeAgo(f.at)+'</div></li>').join('')+'</ol></section>'
     +'<section style="display:grid;gap:6px"><h3>How it works</h3><p class="fine">Everyone can give up to '+DAILY_APPLES+' apples a day. Pick a reason and add a note so the thanks is specific. The red apples on the plaza tree are today’s gifts; the gold ones are Golden Apple members.</p></section>');
 }
@@ -1140,12 +1061,10 @@ function openMenu(confirmDelete){
     +'<div class="storage-row"><span>Cookie</span><span class="'+(state.cookieOK?'ok':'bad')+'">'+(state.cookieOK?'Saved':'Blocked by browser')+'</span></div>'
     +'<div class="storage-row"><span>Local storage</span><span class="'+(Store.ok?'ok':'bad')+'">'+(Store.ok?'Saved':'Blocked by browser')+'</span></div>'
     +'<p class="fine">'+(state.cookieOK?'Next time you open this page on this browser, you’ll be logged straight back in.':Store.ok?'This browser blocks cookies in embedded pages, so your profile is kept in local storage instead. You’ll still be remembered here.':'This browser blocks both, so your profile lasts only until you close the page.')+'</p></div>'
-    +'<div class="menu-actions"><button class="btn" id="mEdit" type="button">Edit profile &amp; avatar</button><button class="btn" id="mLogout" type="button">Log out</button><button class="btn" id="mReset" type="button">Reset demo coworkers</button></div>'
+    +'<div class="menu-actions"><button class="btn" id="mEdit" type="button">Edit profile &amp; avatar</button><button class="btn" id="mLogout" type="button">Log out</button></div>'
     +(confirmDelete?'<div style="display:grid;gap:8px;padding:12px;border:2px solid var(--apple)"><p style="margin:0">Delete your profile, apples and inbox from this browser? This can’t be undone.</p><div class="menu-actions"><button class="btn btn-apple" id="mDelYes" type="button">Yes, delete my profile</button><button class="btn" id="mDelNo" type="button">Keep it</button></div></div>':'<button class="btn btn-ghost" id="mDel" type="button" style="justify-self:start">Delete my profile</button>'));
   const on=(id,fn)=>{const el=$('#'+id,modalBody);if(el)el.addEventListener('click',fn);};
   on('mEdit',()=>{closeModal();openSetup('edit');});on('mLogout',logout);
-  on('mReset',()=>{const fresh=seedWorld();for(const id in fresh.npc){if(WORLD.npc[id])Object.assign(WORLD.npc[id],fresh.npc[id]);}WORLD.feed=fresh.feed;saveWorld();
-    for(const n of npcs)n.ch.refresh();drawBoard();renderFeed();if(state.selected)renderCard();closeModal();toast('Demo coworkers reset to their starting apples.','',2600);});
   on('mDel',()=>openMenu(true));on('mDelNo',()=>openMenu(false));
   on('mDelYes',()=>{const email=me.email;delete USERS[email];saveUsers();Cookies.del(profileCookieName(email));Cookies.del('ga_session');Store.del('ga_last');closeModal();leaveWorld();toast('Your profile was deleted from this browser.','',3200);});
 }
@@ -1262,7 +1181,7 @@ function enterWorld(rec){
   cam.yaw=0;cam.pitch=0.55;cam.dist=10.5;cam.target.set(SPAWN.x,1.3,SPAWN.z);
   // other profiles from this browser appear as "Away" at their desks
   for(const l of locals.splice(0)){l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
-  const free=SPOTS.filter(s=>s.desk&&!s.reserved&&!s.occ);let i=0;
+  const free=SPOTS.filter(s=>s.desk&&!s.occ);let i=0;
   for(const email in USERS){if(email===rec.email)continue;const u=USERS[email];const s=free[i++];if(!s)break;
     const ch=new Character({id:'local:'+email,kind:'local',data:u});state.chars.set(ch.id,ch);s.occ=ch.id;ch.spot=s;placeAt(ch,s);locals.push(ch);}
   resumeWorld();renderMe();renderFeed();drawBoard();lastZone='';
@@ -1286,9 +1205,8 @@ let last=performance.now(),frameN=0,uiT=0;
 function frame(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frameN++;
   if(state.mode==='world')updatePlayer(dt);
-  for(const n of npcs)npcThink(n,dt);
   for(const ch of state.chars.values())ch.update(dt);
-  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateAmbient(dt);
+  updateParticles(dt);updateFlyers(dt);updateRings(dt);
   waterTex.offset.x+=dt*0.015;waterTex.offset.y+=dt*0.008;
   for(const c of clouds){c.position.x+=c.userData.v*dt;if(c.position.x>100)c.position.x=-100;}
   for(const d of ducks){const u=d.userData;u.a+=dt*u.s;d.position.set(u.cx+Math.sin(u.a)*u.r,-0.2+Math.sin(u.a*6)*0.02,u.cz+Math.cos(u.a)*u.r*0.6);d.rotation.y=u.a+Math.PI/2;}

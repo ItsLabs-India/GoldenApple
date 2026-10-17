@@ -25,11 +25,12 @@ Then open http://localhost:5500.
 npm test         # runs: node tests/smoke-test.js
 ```
 
-The smoke test runs the real `js/app.js` against a fake browser and a three.js stub (Node 18+). It checks 33 things:
+The smoke test runs the real `js/app.js` against a fake browser and a three.js stub (Node 18+). It checks 41 things:
 - email login, duplicate emails and logout / log back in
 - the daily apple budget and the Golden Apple threshold
 - cookies, including rebuilding a profile from its cookie alone
-- that every demo coworker's walking route avoids walls and furniture
+- that every spot-to-spot walking route avoids walls and furniture (the layout stays connected)
+- that apples and pokes from the old demo coworkers are purged from saved profiles
 
 It does **not** render graphics, so check visual changes in a browser.
 
@@ -50,27 +51,25 @@ golden-apple/
 | Want to… | Edit | Look for |
 |---|---|---|
 | Change the daily limit or Golden threshold | `js/app.js` | `DAILY_APPLES`, `GOLDEN_AFTER` (top of file) |
-| Rename or add demo coworkers | `js/app.js` | `NPC_SEEDS` |
-| Change recognition reasons or poke messages | `js/app.js` | `REASONS`, `POKES`, `REPLIES`, `NOTES` |
+| Change recognition reasons or poke messages | `js/app.js` | `REASONS`, `POKES` |
 | Add avatar colours or styles | `js/app.js` | `AV` (and the painter in `paintSkin`) |
 | Move rooms or resize the map | `js/app.js` | `ZONES`, `buildLayout`, `buildFurniture` |
-| Change how often demo coworkers gift or poke you | `js/app.js` | `ambient` and `updateAmbient` |
 | Retheme the UI | `css/styles.css` | the `:root` tokens |
 
-If you move furniture or seats, run `npm test`. The routing check tells you if a coworker would now walk through something.
+If you move furniture or seats, run `npm test`. The routing check tells you if a walking route between spots is now blocked.
 
 ## How data is stored
 
 Everything stays in the user's own browser. There is no server.
 
 - **Cookie (primary).** `ga_session` holds the logged-in email (30 days). `ga_p_<hash>` holds a compact profile: name, role, team, status, avatar and apples received. It is about 180 bytes, well under the 4,096-byte cookie limit, and lasts 180 days. On HTTPS the cookie is written as `SameSite=None; Secure; Partitioned` so it can survive inside embedded pages. Every write is read back to confirm it saved.
-- **localStorage (mirror).** `ga_users` stores full profiles, including the inbox and recent apples, which are too big for a cookie. `ga_world` stores the demo coworkers' apples and the activity feed.
+- **localStorage (mirror).** `ga_users` stores full profiles, including the inbox and recent apples, which are too big for a cookie. `ga_world` stores the activity feed (`{v:2,feed}`). Version 1 also held 9 demo coworkers; on first load the app strips their apples, pokes, feed items and any Golden status earned from them out of saved profiles.
 - **Menu → Where your profile is saved** shows which of the two the current browser allowed.
 - Emails are never shown to other users. Coworkers see only name, role and team.
 
 ## Known limits (MVP)
 
-- **Not multiplayer.** Each browser is its own world. Other profiles created in the same browser appear "Away" at their desks.
+- **Not multiplayer.** Each browser is its own world, and there are no demo coworkers: you only see real profiles created in the same browser, shown "Away" at their desks. A fresh browser starts with an empty office.
 - **Email uniqueness is per browser,** because there's no server to check against.
 - **No password,** so anyone on the same browser can log in as any saved email. Fine for a demo, not for production.
 - Characters pass through each other. No sound.
