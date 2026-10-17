@@ -171,9 +171,10 @@
             <div class="goal" id="meGoal"></div>
           </div>
           <div class="vitals" role="group" aria-label="Your needs">
-            <div class="vital" id="vHp"><img id="icHp" alt=""><span class="lbl">Health</span><div class="bar"><i id="vHpBar" style="width:85%"></i></div><span class="num" id="vHpNum">85</span></div>
-            <div class="vital" id="vEn"><img id="icEn" alt=""><span class="lbl">Energy</span><div class="bar"><i id="vEnBar" style="width:85%"></i></div><span class="num" id="vEnNum">85</span></div>
-            <div class="vital" id="vBl"><img id="icBl" alt=""><span class="lbl">Restroom</span><div class="bar"><i id="vBlBar" style="width:15%"></i></div><span class="num" id="vBlNum">15</span></div>
+            <div class="vital" id="vHp"><img id="icHp" alt=""><span class="lbl">Health</span><div class="bar"><i id="vHpBar" style="width:85%"></i><b class="pend" id="vHpPend"></b></div><span class="num"><span id="vHpNum">85</span><span class="tr" id="vHpTr"></span></span></div>
+            <div class="vital" id="vEn"><img id="icEn" alt=""><span class="lbl">Energy</span><div class="bar"><i id="vEnBar" style="width:85%"></i><b class="pend" id="vEnPend"></b></div><span class="num"><span id="vEnNum">85</span><span class="tr" id="vEnTr"></span></span></div>
+            <div class="vital" id="vBl"><img id="icBl" alt=""><span class="lbl">Restroom</span><div class="bar"><i id="vBlBar" style="width:15%"></i><b class="pend" id="vBlPend"></b></div><span class="num"><span id="vBlNum">15</span><span class="tr" id="vBlTr"></span></span></div>
+            <div class="vact" id="vAct">Standing</div>
             <div class="vwarn" id="vWarn" hidden></div>
           </div>
         </div>
@@ -211,6 +212,17 @@
         <button class="x" id="hintClose" type="button" aria-label="Hide controls">×</button>
       </div>
       <div class="prompt" id="prompt" hidden></div>
+      <div class="match-bar panel" id="matchBar" aria-live="polite" hidden>
+        <div class="m-title" id="mTitle">Tennis</div>
+        <div class="m-score"><span class="m-p" id="mP0">You</span><b id="mS0">0</b><i>–</i><b id="mS1">0</b><span class="m-p" id="mP1">—</span></div>
+        <div class="m-note" id="mNote">No opponent</div>
+        <button class="btn btn-apple" id="mLeave" type="button" hidden>Leave match (Q)</button>
+      </div>
+      <div class="fish-ui panel" id="fishUI" hidden><span class="lbl">Line tension</span><div class="tbar"><i id="fishTen"></i></div><span class="num" id="fishDist">0.0 m</span></div>
+      <div class="catch panel" id="catchCard" role="dialog" aria-label="Your catch" hidden>
+        <div class="catch-body" id="catchBody"></div>
+        <div class="catch-actions"><button class="btn btn-gold" id="cKeep" type="button">Keep (K)</button><button class="btn" id="cRelease" type="button">Release (R)</button></div>
+      </div>
 
       <aside id="card" class="panel" role="region" aria-label="Coworker profile" hidden>
         <button class="x" id="cardClose" type="button" aria-label="Close profile">×</button>
@@ -235,6 +247,21 @@
       </div>
     </div>
 
+    <div class="arcade" id="arcade" role="dialog" aria-modal="true" aria-labelledby="arcTitle" hidden>
+      <div class="arc-bar">
+        <b class="arc-title" id="arcTitle">Arcade</b>
+        <span class="arc-players" id="arcPlayers"></span>
+        <span class="arc-keys" id="arcKeys"><span class="key">Arrows</span>/<span class="key">WASD</span> move · <span class="key">Space</span> fire / launch · <span class="key">Enter</span> pause / play again · <span class="key">Esc</span> leave</span>
+        <button class="btn" id="arcFull" type="button">Full screen</button>
+        <button class="btn btn-apple" id="arcExit" type="button">Leave</button>
+      </div>
+      <div class="arc-screen"><canvas id="arcCanvas" width="384" height="216" aria-label="Arcade game screen"></canvas></div>
+      <div class="arc-pad" id="arcPad" hidden>
+        <div class="arc-dpad"><button class="btn" data-b="1" type="button" aria-label="Up">▲</button><button class="btn" data-b="4" type="button" aria-label="Left">◀</button><button class="btn" data-b="8" type="button" aria-label="Right">▶</button><button class="btn" data-b="2" type="button" aria-label="Down">▼</button></div>
+        <button class="btn" data-b="32" type="button">Start</button>
+        <button class="btn btn-gold arc-a" data-b="16" type="button">Fire</button>
+      </div>
+    </div>
     <div class="toasts" id="toasts" aria-live="polite"></div>
     <div class="boot panel" id="bootErr" hidden>The 3D engine didn't load. Check your connection and reload the page.</div>
   </div>

@@ -6,11 +6,13 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const clock = { now: 1000 };
 // internals exposed to tests, injected right before the app's closing `})();`
-const EXPORTS = 'state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
+const EXPORTS = 'SLOT_STRIPS,SLOT_PAY,SLOT_WILD,slotLines,slotWallet,arcBanner:()=>arcBanner,COURTS,COURT_FX,mt,matchSwing,quitMatch,startMatch,makeShot,newBall,stepBall,inCourt,halfAt,isOver,GYM,GYM_KINDS,GYM_COOLER,gym,gymLevel,gymLabel,nearestGym,gymWho,nearCooler,gymStats,startGym,stopGym,ARCADES,GAMES,arc,arcKeys,toIn,nearestArcade,arcadeOccupants,exitArcade,useArcade,arcStart,state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
   + 'DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
   + 'FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup,'
   + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld,'
-  + 'V,STALLS,rr,nearestStall,nearestSink,nutrition,vitalSpeed,canRun,saveVitals';
+  + 'V,STALLS,rr,nearestStall,nearestSink,nutrition,vitalSpeed,canRun,saveVitals,loadVitals,ACT,'
+  + 'DN,DAY_MS,daylightAt,cyclePhase,LAMPS,LAMP_MAT,AREA_LIGHTS,hemi,stars,sunDisc,moonDisc,nightEv,'
+  + 'FISH,FISH_BY,LAKE_FISH,fishing,FISH_RACK,timeBias,biteRate,fishLog,nearRack,castTarget,lakeE';
 function appSource() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   if (!/\}\)\(\);\s*$/.test(src)) throw new Error('app.js must end with })();');
@@ -99,6 +101,7 @@ function createClient(opts = {}) {
     set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; } copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
     clone() { return new V3(this.x, this.y, this.z); } setScalar(s) { this.x = this.y = this.z = s; return this; }
     distanceTo(v) { return Math.hypot(this.x - v.x, this.y - v.y, this.z - v.z); }
+    normalize() { const l = Math.hypot(this.x, this.y, this.z) || 1; this.x /= l; this.y /= l; this.z /= l; return this; }
     lerp(v, t) { this.x += (v.x - this.x) * t; this.y += (v.y - this.y) * t; this.z += (v.z - this.z) * t; return this; }
     project() { this.x = 0; this.y = 0; this.z = 0.5; return this; } }
   class Obj { constructor() { this.position = new V3(); this.rotation = { x: 0, y: 0, z: 0, set(a, b, c) { this.x = a; this.y = b; this.z = c; } }; this.scale = new V3(1, 1, 1); this.children = []; this.visible = true; this.userData = {}; this.matrixWorld = {}; }
@@ -120,6 +123,7 @@ function createClient(opts = {}) {
     PerspectiveCamera: class extends Obj { setViewOffset() {} clearViewOffset() {} updateProjectionMatrix() {} },
     WebGLRenderer: class { constructor() { this.domElement = el('canvas', 'glcanvas'); this.shadowMap = {}; } setPixelRatio() {} getPixelRatio() { return 1; } setSize() {} render() {} },
     Raycaster: class { setFromCamera() {} intersectObjects() { return []; } }, Fog: class {},
+    PointLight: class extends Obj { constructor(c, i, d, k) { super(); this.intensity = i; this.distance = d; this.decay = k; } },
     NearestFilter: 1, RepeatWrapping: 2, PCFSoftShadowMap: 3, DoubleSide: 4, AdditiveBlending: 5
   };
 

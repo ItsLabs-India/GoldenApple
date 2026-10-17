@@ -182,7 +182,11 @@ legend{padding:0 0 4px;font-family:var(--f-display);font-size:15px;font-weight:6
 .goal{font-size:12px;color:var(--muted)}
 /* needs: health, energy, restroom */
 .vitals{display:grid;gap:5px;padding-top:8px;border-top:2px dashed var(--bark-hi)}
-.vital{display:grid;grid-template-columns:14px 62px minmax(0,1fr) 24px;gap:6px;align-items:center}
+.vital{display:grid;grid-template-columns:14px 62px minmax(0,1fr) 40px;gap:6px;align-items:center}
+.vital .bar .pend{position:absolute;top:0;bottom:0;opacity:.38}
+#vHp .pend{background:#e0442e}#vEn .pend{background:var(--gold)}#vBl .pend{background:#6fb7e8}
+.vital .tr{display:inline-block;width:14px;margin-left:2px;font-family:var(--f-body);font-size:9px;color:var(--muted);text-align:left;vertical-align:2px;letter-spacing:-1px}
+.vact{font-size:12px;color:var(--muted)}
 .vital img{width:14px;height:14px;object-fit:contain;image-rendering:pixelated}
 .vital .lbl{font-size:10px}
 .vital .bar{height:8px;border-width:2px}
@@ -191,6 +195,18 @@ legend{padding:0 0 4px;font-family:var(--f-display);font-size:15px;font-weight:6
 .vital .num{font-family:var(--f-num);font-size:17px;line-height:1;text-align:right}
 .vital.low .num{color:var(--apple-hi)}.vital.low .bar{border-color:var(--apple-deep)}
 .vwarn{font-size:12px;color:var(--apple-hi);font-weight:700}
+/* fishing: tension meter and catch card */
+.fish-ui{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:8px 12px;width:min(340px,calc(100% - 32px))}
+.fish-ui .tbar{flex:1;height:12px;background:linear-gradient(90deg,var(--bark-lo) 0 70%,rgba(242,182,50,.25) 70% 90%,rgba(224,68,46,.35) 90%);border:2px solid #000;position:relative}
+.fish-ui .tbar i{position:absolute;inset:0 auto 0 0;background:var(--leaf)}.fish-ui .tbar i.amber{background:var(--gold)}.fish-ui .tbar i.red{background:var(--apple)}
+.fish-ui .num{font-family:var(--f-num);font-size:18px;min-width:52px;text-align:right}
+.catch{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);display:grid;gap:10px;padding:14px;width:min(340px,calc(100% - 32px))}
+.catch-body{display:flex;gap:12px;align-items:center}
+.fish-ico{width:66px;height:36px;image-rendering:pixelated;flex:none}.fish-ico.sm{width:33px;height:18px}
+.catch-name{font-family:var(--f-display);font-size:20px;font-weight:700;color:var(--gold)}
+.catch-meta{font-size:14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.catch-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chip.rar-uncommon{color:#7fd36a}.chip.rar-rare{color:#7fc4f0}.chip.rar-legendary{color:var(--gold)}
 /* restroom stall label */
 .stall-label{position:absolute;left:0;top:0;display:grid;gap:4px;justify-items:center;white-space:nowrap;font-family:var(--f-display);font-size:13px;padding:5px 8px;background:rgba(17,11,7,.82);color:var(--cream);border:2px solid var(--apple);pointer-events:none}
 .stall-label.mine{border-color:var(--st-break)}
@@ -314,3 +330,29 @@ legend{padding:0 0 4px;font-family:var(--f-display);font-size:15px;font-weight:6
 @media (prefers-reduced-motion:reduce){
   .toast,.toast.out{animation:none}
 }
+/* arcade: the full-screen game overlay (canvas is 384x216, scaled up with hard pixels) */
+.arcade{position:absolute;inset:0;z-index:8;display:grid;grid-template-rows:auto 1fr auto;background:#06040c;color:var(--cream)}
+.arc-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:8px 16px;background:var(--bark);border-bottom:2px solid var(--bark-lo)}
+.arc-title{font-family:var(--f-display);font-size:22px;color:var(--gold)}
+.arc-players{font-family:var(--f-display);font-size:15px}
+.arc-keys{flex:1;min-width:0;font-size:13px;opacity:.8}
+.arc-screen{display:grid;place-items:center;min-height:0;padding:12px}
+.arc-screen canvas{width:min(100%,calc((100vh - 140px) * 16 / 9));aspect-ratio:16/9;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;border:4px solid #1c1730;box-shadow:0 0 0 2px #000,0 0 40px rgba(150,110,255,.25);background:#000}
+.arc-pad{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px max(12px,env(safe-area-inset-bottom,0px))}
+.arc-dpad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,44px);gap:4px}
+.arc-dpad [data-b=1]{grid-column:2;grid-row:1}.arc-dpad [data-b=4]{grid-column:1;grid-row:2}.arc-dpad [data-b=8]{grid-column:3;grid-row:2}.arc-dpad [data-b=2]{grid-column:2;grid-row:3}
+.arc-a{width:84px;height:84px;border-radius:50%;font-size:18px}
+.arc-pad .btn{touch-action:none;user-select:none}
+@media (max-width:640px){.arc-keys{display:none}}
+/* match bar: the tennis / badminton score at the top while you are in a court */
+.match-bar{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:4px;padding:8px 16px 10px;min-width:240px;z-index:4;text-align:center}
+.m-title{font-family:var(--f-display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)}
+.m-score{display:flex;align-items:center;gap:10px;font-family:var(--f-display)}
+.m-score b{font-size:30px;line-height:1;min-width:1.2em;color:var(--cream)}
+.m-score i{font-style:normal;font-size:22px;opacity:.7}
+.m-p{font-size:14px;min-width:70px}
+.m-p:first-child{text-align:right;color:#4fd3ff}.m-p:last-child{text-align:left;color:#ff8f6e}
+.m-note{font-size:13px;opacity:.9}
+.match-bar .btn{font-size:13px;padding:4px 10px;margin-top:2px}
+#hud.in-court ~ .toasts{top:118px}
+.opp-list{display:grid;gap:8px}
