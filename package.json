@@ -1,0 +1,13 @@
+{
+  "name": "golden-apple",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Block-style 3D office world for workplace recognition: pokes, daily apples and Golden Apple status.",
+  "scripts": {
+    "start": "npx --yes serve -l 5500 .",
+    "test": "node tests/smoke-test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

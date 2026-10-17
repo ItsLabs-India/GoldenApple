@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Golden Apple</title>
+  <meta name="description" content="A block-style office world where coworkers poke each other and give daily apples to earn Golden Apple status.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@400;500;600;700&family=VT323&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="stage"></div>
+    <div id="labels"></div>
+
+    <section id="screen-login" class="screen" aria-label="Log in">
+      <div class="login-card panel">
+        <div class="brand">
+          <img id="brandIcon" alt="" width="55" height="50">
+          <div>
+            <h1>Golden Apple</h1>
+            <p class="sub">Office recognition world</p>
+          </div>
+        </div>
+        <p class="lede">Walk the office as your own block avatar, poke coworkers, and hand out apples for good work.</p>
+
+        <div id="returning" class="returning" hidden>
+          <img id="retHead" class="head lg" alt="">
+          <div style="min-width:0">
+            <div class="ret-hi">Welcome back</div>
+            <div class="ret-name" id="retName"></div>
+            <div class="ret-mail" id="retMail"></div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-gold" id="retEnter" type="button">Enter workspace</button>
+            <button class="btn" id="retSwitch" type="button">Use a different email</button>
+          </div>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" spellcheck="false">
+            <p class="err" id="emailErr" role="alert"></p>
+          </div>
+          <button class="btn btn-gold wide" type="submit">Continue</button>
+          <p class="fine">No password. One profile per email. Your profile is remembered in this browser with a cookie.</p>
+        </form>
+
+        <ul class="rules">
+          <li><img id="ruleApple" alt=""><span>Give up to <b>10 apples</b> a day</span></li>
+          <li><img id="ruleGold" alt=""><span>Receive <b>more than 10</b> in total to become a <b>Golden Apple</b></span></li>
+          <li><span class="key">2×</span><span><b>Double-click</b> a coworker to poke them</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="screen-setup" class="screen" aria-label="Profile setup" hidden>
+      <div class="setup">
+        <div class="setup-preview panel">
+          <div id="previewMount" aria-label="Avatar preview. Drag to turn."></div>
+          <div class="pv-top">
+            <span class="lbl">Preview</span>
+            <button class="btn btn-gold" id="randomBtn" type="button">Randomise</button>
+          </div>
+          <div class="pv-bottom">
+            <span class="tag pv-tag" id="pvTag"><i class="dot" style="background:var(--st-available)"></i><span>Your name</span></span>
+            <span class="pv-hint">Drag to turn · Your character is 32 skin pixels tall</span>
+          </div>
+        </div>
+
+        <form class="setup-form panel" id="setupForm" novalidate>
+          <div>
+            <h2 id="setupTitle">Set up your profile</h2>
+            <p class="fine" id="setupSub">Creating a profile for <b id="setupEmail"></b></p>
+          </div>
+          <fieldset>
+            <legend>Profile</legend>
+            <div class="field">
+              <label for="pName">Display name</label>
+              <input id="pName" type="text" maxlength="24" autocomplete="nickname" placeholder="How coworkers see you">
+              <p class="err" id="pNameErr" role="alert"></p>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="pRole">Role</label>
+                <input id="pRole" type="text" maxlength="32" placeholder="Product Designer">
+              </div>
+              <div class="field">
+                <label for="pTeam">Team</label>
+                <input id="pTeam" type="text" maxlength="24" list="teamList" placeholder="Design">
+                <datalist id="teamList"><option value="Design"><option value="Engineering"><option value="Product"><option value="Quality"><option value="Data"><option value="Support"><option value="People"><option value="Marketing"></datalist>
+              </div>
+            </div>
+            <div class="field">
+              <label for="pStatus">Status</label>
+              <select id="pStatus">
+                <option value="available">Available</option>
+                <option value="focus">Focused</option>
+                <option value="meeting">In a meeting</option>
+                <option value="break">On a break</option>
+              </select>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Avatar</legend>
+            <div id="avControls" style="display:grid;gap:10px"></div>
+          </fieldset>
+          <p class="err" id="setupErr" role="alert"></p>
+          <div class="form-actions">
+            <button type="button" class="btn" id="setupBack">Back</button>
+            <button type="submit" class="btn btn-gold" id="setupSave">Enter workspace</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <div id="hud" hidden>
+      <div class="hud-tl">
+        <div class="me panel">
+          <div class="me-row">
+            <img id="meHead" class="head" alt="">
+            <div class="me-id">
+              <div class="me-name"><span id="meName"></span><span class="gold-chip" id="meGold" hidden></span></div>
+              <div class="me-sub" id="meSub"></div>
+            </div>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="lbl">Apples to give today</span><span class="num" id="meLeft">10</span></div>
+            <div class="pips" id="mePips" aria-hidden="true"></div>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="lbl">Apples received</span><span class="num" id="meRecv">0</span></div>
+            <div class="bar" id="meBarWrap"><i id="meBar" style="width:0"></i></div>
+            <div class="goal" id="meGoal"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn sm" id="bBoard" type="button">Orchard</button>
+          <button class="btn sm" id="bInbox" type="button">Inbox<span class="badge" id="inboxBadge" hidden>0</span></button>
+          <button class="btn sm" id="bEdit" type="button">Profile</button>
+          <button class="btn sm" id="bMenu" type="button">Menu</button>
+        </div>
+      </div>
+
+      <div class="hud-tr">
+        <div class="map panel">
+          <canvas id="minimap" width="168" height="168" aria-label="Map of the office"></canvas>
+          <div class="map-zone" id="mapZone">Plaza</div>
+        </div>
+        <div class="feed panel">
+          <div class="feed-h">Orchard activity</div>
+          <ol id="feed"></ol>
+        </div>
+      </div>
+
+      <div class="hint panel" id="hint">
+        <span id="hintKeys"><span class="key">WASD</span> walk</span>
+        <span><span class="key">Shift</span> run</span>
+        <span><span class="key">Space</span> jump</span>
+        <span><span class="key">E</span> sit</span>
+        <span>Drag to look</span>
+        <span>Click a coworker</span>
+        <span>Double-click to poke</span>
+        <button class="x" id="hintClose" type="button" aria-label="Hide controls">×</button>
+      </div>
+      <div class="prompt" id="prompt" hidden></div>
+
+      <aside id="card" class="panel" role="region" aria-label="Coworker profile" hidden>
+        <button class="x" id="cardClose" type="button" aria-label="Close profile">×</button>
+        <div id="cardBody" style="display:grid;gap:14px"></div>
+      </aside>
+
+      <div id="touch" hidden>
+        <div class="joy" id="joy"><div class="knob" id="knob"></div></div>
+        <div class="tbtns">
+          <button class="btn" id="tUse" type="button">Use</button>
+          <button class="btn" id="tRun" type="button" aria-pressed="false">Run</button>
+          <button class="btn btn-gold" id="tJump" type="button">Jump</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="modal" hidden>
+      <div class="modal-panel panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="x" id="modalClose" type="button" aria-label="Close">×</button>
+        <div id="modalBody" style="display:grid;gap:16px"></div>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div class="boot panel" id="bootErr" hidden>The 3D engine didn't load. Check your connection and reload the page.</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
