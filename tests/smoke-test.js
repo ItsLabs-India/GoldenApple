@@ -4,7 +4,7 @@
 const fs = require('fs');
 let src = fs.readFileSync(require('path').join(__dirname, '..', 'js', 'app.js'), 'utf8');
 // test-only instrumentation: expose internals right before the IIFE closes
-src = src.replace(/\}\)\(\);\s*$/, 'window.__ga={state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile};\n})();');
+src = src.replace(/\}\)\(\);\s*$/, 'window.__ga={state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup};\n})();');
 
 const errors = [];
 // ---------- tiny DOM ----------
@@ -86,6 +86,28 @@ const THREE = {
   NearestFilter: 1, RepeatWrapping: 2, PCFSoftShadowMap: 3, DoubleSide: 4, AdditiveBlending: 5
 };
 win.THREE = THREE;
+
+// ---------- strict Web Audio stub: throws on anything a real browser would reject ----------
+let audioNodes = 0;
+const finite = (...a) => a.forEach(x => { if (typeof x !== 'number' || !isFinite(x)) throw new Error('audio value not finite: ' + x); });
+class AParam { constructor(v) { this.value = v; }
+  setValueAtTime(v, t) { finite(v, t); return this; } linearRampToValueAtTime(v, t) { finite(v, t); return this; }
+  exponentialRampToValueAtTime(v, t) { finite(v, t); if (!(v > 0)) throw new Error('exponential ramp to ' + v); return this; }
+  setTargetAtTime(v, t, c) { finite(v, t, c); return this; } cancelScheduledValues() { return this; } }
+class ANode { constructor(ctx) { this.ctx = ctx; audioNodes++; } disconnect() {}
+  connect(n) { if (!(n instanceof ANode || n instanceof AParam || n === this.ctx.destination)) throw new Error('connect() to a non-node'); return n; } }
+const typed = (cls, ok) => Object.defineProperty(cls.prototype, 'type', { get() { return this._t; }, set(v) { if (!ok.includes(v)) throw new Error('bad type ' + v); this._t = v; } });
+class AOsc extends ANode { constructor(c) { super(c); this.frequency = new AParam(440); this._t = 'sine'; } start(t) { finite(t || 0); } stop(t) { finite(t || 0); } }
+typed(AOsc, ['sine', 'square', 'sawtooth', 'triangle']);
+class AFilter extends ANode { constructor(c) { super(c); this.frequency = new AParam(350); this.Q = new AParam(1); this._t = 'lowpass'; } }
+typed(AFilter, ['lowpass', 'highpass', 'bandpass']);
+class AGain extends ANode { constructor(c) { super(c); this.gain = new AParam(1); } }
+class ADelay extends ANode { constructor(c) { super(c); this.delayTime = new AParam(0); } }
+class ASrc extends ANode { constructor(c) { super(c); this.buffer = null; this.loop = false; } start(t, o, d) { finite(t || 0, o || 0, d || 0); if (!this.buffer) throw new Error('buffer source started without a buffer'); } stop() {} }
+win.AudioContext = class { constructor() { this.state = 'running'; this.sampleRate = 8000; this.destination = {}; } get currentTime() { return now / 1000; }
+  createGain() { return new AGain(this); } createOscillator() { return new AOsc(this); } createBiquadFilter() { return new AFilter(this); } createDelay() { return new ADelay(this); }
+  createBufferSource() { return new ASrc(this); } createBuffer(ch, len) { const d = new Float32Array(len); return { getChannelData: () => d, length: len }; }
+  suspend() { this.state = 'suspended'; return Promise.resolve(); } resume() { this.state = 'running'; return Promise.resolve(); } };
 global.window = win; global.document = document; global.localStorage = localStorage; global.THREE = THREE;
 global.matchMedia = win.matchMedia; global.requestAnimationFrame = win.requestAnimationFrame; global.addEventListener = win.addEventListener;
 global.location = win.location; global.devicePixelRatio = 2; global.btoa = s => Buffer.from(s, 'binary').toString('base64'); global.atob = s => Buffer.from(s, 'base64').toString('binary');
@@ -126,7 +148,19 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   frames(120, 16);
   ok(true, 'attract mode ran 120 frames');
 
-  console.log('Routing (every spot-to-spot walk avoids walls and furniture)');
+  console.log('Desk slots and desk models');
+  ok(G.DESK_SLOTS.length === 24 && G.DESK_SLOTS.every(S => !S.desk), '24 desk slots, all empty before anyone logs in');
+  const S0 = G.DESK_SLOTS[0];
+  ok(G.cellTop(S0.x, S0.dz) === 0, 'an empty slot has no collision (no invisible desk)');
+  let built = 0;
+  for (const k of G.DK_KEYS) for (let i = 0; i < G.DK[k].length; i++) { G.buildDesk(Object.assign({}, G.DESK_DEFAULT, { [k]: i })); built++; }
+  for (let i = 0; i < G.DK.decor.length; i++) { G.buildDesk(Object.assign({}, G.DESK_DEFAULT, { decor: [i, (i + 1) % G.DK.decor.length] })); built++; }
+  ok(built > 40, 'every desk colour, chair, computer, screen, plant, pet and decor item builds (' + built + ' models)');
+  ok(G.buildDesk(Object.assign({}, G.DESK_DEFAULT, { decor: [0, 1, 2, 3] })) && G.deskToArr({ ...G.DESK_DEFAULT, decor: [0, 1, 2] }).length === 8, 'decor is capped and the desk packs into 8 numbers for the cookie');
+  G.DESK_SLOTS.forEach((S, i) => G.placeDesk(i, G.DESK_DEFAULT, 'routing@test'));
+  ok(G.cellTop(S0.x, S0.dz) > 0.55, 'a placed desk is solid');
+
+  console.log('Routing (every spot-to-spot walk avoids walls and furniture, with every desk built)');
   let bad = 0, checked = 0; const badEx = [];
   const solidAt = (x, z) => G.cellTop(x, z) > 0.55;
   const NS = G.SPOTS.filter(s => s.zone !== "plaza"); for (const a of NS) for (const b of NS) {
@@ -144,6 +178,14 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   badApproach.slice(0, 5).forEach(s => console.log('   approach blocked', s.zone, s.x, s.z, '->', s.approach.x, s.approach.z, G.cellTop(s.approach.x, s.approach.z)));
   ok(badApproach.length === 0, 'every seat has a free stand-up point');
   ok(G.cellTop(0, 9.5) === 0, 'spawn point is open ground');
+  G.DESK_SLOTS.forEach((S, i) => G.clearDesk(i));
+  ok(G.cellTop(S0.x, S0.dz) === 0 && G.DESK_SLOTS.every(S => !S.desk && !S.spot.owner), 'clearing a desk removes it and its collision');
+
+  console.log('Sound');
+  ok(G.Sound.ctx === null, 'no audio before the first click or key press (autoplay rules)');
+  G.sfx('give'); ok(true, 'sound effects are silent no-ops before audio starts');
+  window._l.pointerdown.forEach(fn => fn({}));
+  ok(!!G.Sound.ctx && audioNodes > 0, 'first pointer press starts the audio engine (' + audioNodes + ' nodes)');
 
   console.log('Login → profile setup → world');
   const email = getEl('#email'); email.value = 'not-an-email'; getEl('#loginForm').dispatch('submit');
@@ -161,6 +203,26 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(!!pc, 'profile cookie written (' + (pc ? cookieJar[pc].length : 0) + ' bytes, limit 4096)');
   ok(G.state.cookieOK === true, 'cookie write verified by read-back');
 
+  console.log('Your own desk');
+  const me0 = G.state.me, testerSlot = me0.deskSlot, mySlot = G.DESK_SLOTS[testerSlot];
+  ok(testerSlot >= 0 && !!mySlot.desk && mySlot.spot.owner === 'tester@example.com', 'new profile gets its own desk in the Work Desks room (' + (mySlot && mySlot.label) + ')');
+  ok(JSON.stringify(G.deskToArr(me0.desk)) === JSON.stringify(G.deskToArr(G.DESK_DEFAULT)), 'no desk choices made, so the default desk is used');
+  const oldSlot = G.USERS()['old@example.com'].deskSlot;
+  ok(oldSlot >= 0 && oldSlot !== testerSlot && !!G.DESK_SLOTS[oldSlot].desk, 'the older profile without a desk is given a different one');
+  ok(G.state.chars.get('local:old@example.com').spot === G.DESK_SLOTS[oldSlot].spot, 'Away people sit at their own desk');
+  ok(G.DESK_SLOTS.filter(S => S.desk).length === 2, 'only real people have desks (2 of 24 built)');
+  const P = G.state.player, ap = mySlot.spot.approach;
+  P.root.position.set(ap.x, 0, ap.z);
+  ok(G.nearestSeat() === mySlot.spot, 'standing by your desk offers your chair');
+  G.tryInteract(); ok(P.seat === mySlot.spot, 'E sits you down at your own desk');
+  G.tryInteract(); ok(!P.seat, 'E again stands you up');
+  const oSpot = G.DESK_SLOTS[oldSlot].spot; P.root.position.set(oSpot.approach.x, 0, oSpot.approach.z);
+  ok(G.nearestSeat() !== oSpot && G.nearestOtherDesk() === oSpot, 'someone else’s desk is never offered as a seat');
+  G.tryInteract(); ok(!P.seat, 'E at someone else’s desk does not sit you down');
+  const empty = G.DESK_SLOTS.find(S => !S.desk); P.root.position.set(empty.spot.approach.x, 0, empty.spot.approach.z);
+  ok(G.nearestSeat() !== empty.spot, 'an empty slot has no chair to sit on');
+  P.root.position.set(0, 0, 9.5);
+
   console.log('Simulate 4 minutes of world time');
   const keysDown = name => window._l.keydown.forEach(fn => fn({ key: name, repeat: false, preventDefault() {} }));
   const keysUp = name => window._l.keyup.forEach(fn => fn({ key: name }));
@@ -171,6 +233,66 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   for (let i = 0; i < 4 * 60 * 20; i++) frames(1, 50);
   ok(true, 'ran 4800 frames');
   ok((G.state.me.inbox || []).length === 0 && G.WORLD().feed.length === 0, 'nobody fake gifted or poked you while idle');
+
+  console.log('Music and sounds follow you around');
+  ok(G.Sound.theme === 'plaza' && G.Sound.ambKey !== null, 'outdoors plays the plaza theme and ambience');
+  const goTo = (x, z) => { G.state.player.root.position.set(x, 0, z); frames(130, 16); };
+  goTo(25, 0.5); ok(G.Sound.theme === 'pantry' && G.Sound.ambKey === 'pantry', 'walking into the Pantry switches music and ambience');
+  goTo(-25, 0); ok(G.Sound.theme === 'restroom', 'the Restroom has its own theme');
+  goTo(0, 20); ok(G.Sound.theme === 'lake', 'so does Lakeside');
+  goTo(ap.x, ap.z); ok(G.Sound.theme === 'desks', 'and the Work Desks');
+  const n0 = audioNodes; frames(120, 16); ok(audioNodes > n0, 'notes keep being scheduled while you stand still');
+  for (const n of ['step', 'jump', 'land', 'splash', 'sit', 'stand', 'give', 'catch', 'golden', 'poke', 'poked', 'boop', 'ui', 'open', 'close', 'deny']) G.sfx(n, {});
+  for (const g of ['grass', 'path', 'plaza', 'oak', 'pantry', 'tile', 'sand', 'water', 'dock']) G.sfx('step', { ground: g });
+  ok(true, 'every sound effect and footstep surface plays without errors');
+  G.toggleMute(); const n1 = audioNodes; frames(60, 16);
+  ok(G.SND.muted && G.Sound.ctx.state === 'suspended' && audioNodes === n1, 'mute (M) suspends audio and schedules nothing');
+  G.toggleMute(); ok(!G.SND.muted && G.Sound.ctx.state === 'running' && JSON.parse(store.ga_sound).muted === false, 'unmute resumes, and the setting is saved');
+  G.state.player.root.position.set(0, 0, 9.5); frames(5, 16);
+
+  console.log('Edit your desk');
+  G.openSetup('edit'); const sd = G.state.setup.desk; sd.pet = 1; sd.decor = [0, 1]; sd.tech = 1; sd.chairStyle = 1;
+  getEl('#setupForm').dispatch('submit');
+  ok(G.state.mode === 'world' && G.state.me.desk.pet === 1 && G.state.me.desk.tech === 1 && G.state.me.desk.decor.length === 2, 'desk changes are saved (cat, two monitors, two decor items)');
+  ok(G.state.me.deskSlot === testerSlot && !!mySlot.desk && mySlot.spot.owner === 'tester@example.com', 'your desk is rebuilt in the same spot, still yours');
+
+  console.log('Pantry food counter');
+  const nCat = c => G.FOODS.filter(x => x.cat === c).length;
+  ok(['veg', 'nonveg', 'fruit', 'drink'].every(c => nCat(c) >= 6), 'at least 6 veg, non-veg, fruit and drink items (' + G.FOODS.length + ' foods)');
+  G.FOODS.forEach(x => { G.buildFood(x.id); G.buildFood(x.id, true); }); ok(G.buildFood('egg', true).children.length < G.buildFood('egg').children.length, 'every food model builds, on the counter and plate-free in the hand');
+  const m0 = G.menuFor(1000);
+  ok(m0.length === 8 && ['veg', 'veg', 'nonveg', 'nonveg', 'fruit', 'fruit', 'drink', 'drink'].every((c, i) => G.FOOD[m0[i]].cat === c) && new Set(m0).size === 8, 'a menu is 2 veg, 2 non-veg, 2 fruits and 2 drinks, no repeats');
+  ok(JSON.stringify(G.menuFor(1000)) === JSON.stringify(m0), 'same 5-minute slot, same menu (everyone sees the same counter)');
+  let changed = 0; for (let b = 1001; b < 1013; b++) if (JSON.stringify(G.menuFor(b)) !== JSON.stringify(m0)) changed++;
+  ok(changed >= 11, 'the menu changes from one 5-minute slot to the next (' + changed + '/12)');
+  ok(G.menu.bucket === G.menuBucket() && G.counterGroup.children.length === 8, 'the counter shows the current menu on 8 trays');
+  const Pf = G.state.player, keyTap = k => { keysDown(k); keysUp(k); };
+  Pf.root.position.set(31.5, 0, G.SLOT_Z[2]);
+  ok(G.nearestCounterItem() === 2, 'standing at the counter selects the item in front of you');
+  G.tryInteract(); ok(Pf.held === G.menu.items[2] && !!Pf.heldMesh && Pf.av.armR.children.includes(Pf.heldMesh), 'E takes it (' + G.FOOD[G.menu.items[2]].name + ') into your right hand');
+  Pf.root.position.set(31.5, 0, G.SLOT_Z[6]); G.tryInteract(); ok(Pf.held === G.menu.items[6], 'taking another item swaps it');
+  Pf.setAvatar(G.state.me.avatar); ok(Pf.av.armR.children.includes(Pf.heldMesh), 'the item stays in your hand when your avatar is rebuilt');
+  keyTap('f'); ok(!!Pf.eating && Pf.anim.eat === 'drink', 'F starts drinking straight away (slot 7 is a drink)');
+  let n2 = audioNodes; frames(40, 50);
+  ok(!Pf.eating && !Pf.held && Pf.anim.eat === null && audioNodes > n2, 'after 1.6 s the drink is gone, with gulp sounds and an "ahh"');
+  Pf.root.position.set(31.5, 0, G.SLOT_Z[0]); G.tryInteract(); keyTap('f');
+  ok(Pf.eating && Pf.anim.eat === 'eat', 'food uses the eating animation (arm to mouth, crumbs, crunching)');
+  frames(40, 50); ok(!Pf.held && !Pf.eating, 'and is eaten after 1.6 s');
+  Pf.root.position.set(31.5, 0, G.SLOT_Z[3]); G.tryInteract();
+  const stool = G.SPOTS.find(x => x.zone === 'pantry' && x.pose === 'sit'); Pf.root.position.set(stool.approach.x, 0, stool.approach.z);
+  G.tryInteract(); ok(Pf.seat && Pf.eating && Pf.anim.eat === 'eat', 'walking to a pantry stool and sitting down starts eating');
+  frames(40, 50); ok(!Pf.held && Pf.seat, 'you finish eating while seated'); G.tryInteract(); ok(!Pf.seat, 'E stands you up again');
+  Pf.root.position.set(31.5, 0, G.SLOT_Z[4]); G.tryInteract(); keyTap('q'); ok(!Pf.held, 'Q puts the item down without eating it');
+  Pf.root.position.set(31.5, 0, G.COFFEE_Z); G.tryInteract();
+  ok(G.brew.on && !Pf.held, 'E at the coffee machine starts brewing');
+  frames(60, 50); ok(!G.brew.on && Pf.held === 'coffee', 'after the brew you are holding a cup of coffee');
+  keyTap('f'); ok(Pf.anim.eat === 'drink', 'F drinks the coffee'); frames(40, 50); ok(!Pf.held, 'coffee finished');
+  const tEl = getEl('#toasts'), t0 = tEl.children.length; G.refreshMenu(G.menu.bucket + 1);
+  ok(JSON.stringify(G.menu.items) === JSON.stringify(G.menuFor(G.menuBucket() + 1)) && tEl.children.some(c => /Fresh menu/.test(c.innerHTML)), 'when the 5 minutes are up the counter restocks and people in the Pantry are told');
+  G.refreshMenu(G.menuBucket()); frames(5, 16); ok(G.menu.bucket === G.menuBucket(), 'the menu follows the clock');
+  for (const n of ['pick', 'putdown', 'crunch', 'munch', 'juicy', 'gulp', 'burp', 'ahh', 'brew', 'menu']) G.sfx(n, {});
+  ok(true, 'every food sound plays without errors');
+  Pf.root.position.set(0, 0, 9.5); frames(5, 16);
 
   console.log('Apples & Golden Apple');
   const oldCh = G.state.chars.get('local:old@example.com');
@@ -201,16 +323,24 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(Object.keys(G.USERS()).filter(k => k === 'tester@example.com').length === 1 && Object.keys(G.USERS()).length === 2, 'still exactly one profile for that email');
   // second user on the same browser shows up as Away
   G.logout(); email.value = 'second@example.com'; getEl('#loginForm').dispatch('submit');
-  getEl('#pName').value = 'Second'; getEl('#setupForm').dispatch('submit');
+  getEl('#pName').value = 'Second'; G.state.setup.desk.plant = 3; getEl('#setupForm').dispatch('submit');
   const away = [...G.state.chars.values()].filter(c => c.kind === 'local');
   const tester = away.find(c => c.data.name === 'Test User');
   ok(away.length === 2 && !!tester && G.state.chars.size === 3, 'other profiles on this browser appear as Away, and nobody else');
+  const sec = G.state.me;
+  ok(sec.desk.plant === 3 && sec.deskSlot >= 0 && ![testerSlot, oldSlot].includes(sec.deskSlot), 'desk picked during sign-up (cactus) is saved, in a third spot');
+  ok(tester.spot === mySlot.spot && G.DESK_SLOTS.filter(S => S.desk).length === 3, 'Test User now sits Away at their own desk; three desks built');
   G.state.me.given = null; G.giveApples(G.state.player, tester, 2, 'Helping hand', 'Thanks!');
   ok((G.USERS()['tester@example.com'].inbox || []).some(i => i.type === 'apple' && i.count === 2), 'apples to an Away user land in their inbox');
+  // deleting a profile frees its desk (drop listeners left by earlier menus so only this one runs)
+  const secSlot = sec.deskSlot; getEl('#mDelYes@modalBody')._l = {};
+  G.openMenu(true); getEl('#mDelYes@modalBody').dispatch('click');
+  ok(!G.USERS()['second@example.com'] && !G.DESK_SLOTS[secSlot].desk, 'deleting a profile removes its desk');
   // cookie-only recovery: wipe localStorage, keep cookies
   for (const k of Object.keys(store)) delete store[k];
   const rec = G.findUser('tester@example.com');
   ok(!!rec && rec.name === 'Test User', 'profile can be rebuilt from its cookie alone');
+  ok(rec.deskSlot === testerSlot && rec.desk.pet === 1 && rec.desk.decor.length === 2, 'desk spot and desk choices are rebuilt from the cookie too');
 
   await new Promise(r => setTimeout(r, 300));
   console.log(errors.length ? `\n${errors.length} FAILURE(S)` : '\nALL CHECKS PASSED');

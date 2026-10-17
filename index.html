@@ -60,14 +60,17 @@
     <section id="screen-setup" class="screen" aria-label="Profile setup" hidden>
       <div class="setup">
         <div class="setup-preview panel">
-          <div id="previewMount" aria-label="Avatar preview. Drag to turn."></div>
+          <div id="previewMount" aria-label="Avatar and desk preview. Drag to turn."></div>
           <div class="pv-top">
-            <span class="lbl">Preview</span>
-            <button class="btn btn-gold" id="randomBtn" type="button">Randomise</button>
+            <div class="pv-tabs" role="group" aria-label="Preview">
+              <button class="chip-btn g" id="pvAvatar" type="button" aria-pressed="true">Avatar</button>
+              <button class="chip-btn g" id="pvDesk" type="button" aria-pressed="false">Desk</button>
+            </div>
+            <button class="btn btn-gold" id="randomBtn" type="button">Randomise avatar</button>
           </div>
           <div class="pv-bottom">
             <span class="tag pv-tag" id="pvTag"><i class="dot" style="background:var(--st-available)"></i><span>Your name</span></span>
-            <span class="pv-hint">Drag to turn · Your character is 32 skin pixels tall</span>
+            <span class="pv-hint" id="pvHint">Drag to turn · Your character is 32 skin pixels tall</span>
           </div>
         </div>
 
@@ -108,6 +111,11 @@
             <legend>Avatar</legend>
             <div id="avControls" style="display:grid;gap:10px"></div>
           </fieldset>
+          <fieldset>
+            <legend>Your desk</legend>
+            <p class="fine" id="deskNote"></p>
+            <div id="dkControls" style="display:grid;gap:10px"></div>
+          </fieldset>
           <p class="err" id="setupErr" role="alert"></p>
           <div class="form-actions">
             <button type="button" class="btn" id="setupBack">Back</button>
@@ -142,6 +150,7 @@
           <button class="btn sm" id="bInbox" type="button">Inbox<span class="badge" id="inboxBadge" hidden>0</span></button>
           <button class="btn sm" id="bEdit" type="button">Profile</button>
           <button class="btn sm" id="bMenu" type="button">Menu</button>
+          <button class="btn sm" id="bSound" type="button" aria-pressed="true">Sound</button>
         </div>
       </div>
 
@@ -161,6 +170,8 @@
         <span><span class="key">Shift</span> run</span>
         <span><span class="key">Space</span> jump</span>
         <span><span class="key">E</span> sit</span>
+        <span><span class="key">F</span> eat</span>
+        <span><span class="key">M</span> sound</span>
         <span>Drag to look</span>
         <span>Click a coworker</span>
         <span>Double-click to poke</span>
@@ -177,6 +188,7 @@
         <div class="joy" id="joy"><div class="knob" id="knob"></div></div>
         <div class="tbtns">
           <button class="btn" id="tUse" type="button">Use</button>
+          <button class="btn btn-apple" id="tEat" type="button" hidden>Eat</button>
           <button class="btn" id="tRun" type="button" aria-pressed="false">Run</button>
           <button class="btn btn-gold" id="tJump" type="button">Jump</button>
         </div>
