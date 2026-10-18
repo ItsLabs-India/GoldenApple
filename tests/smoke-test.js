@@ -606,6 +606,54 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(near(G.PX * 32, 1.8, 0.05), 'people are 1.8 m tall: the scale everything is built to');
   pos.set(0, 0, 9.5); frames(5, 16);
 
+  console.log('Campus bikes');
+  const BK = G.bikes, meK = G.myKey(), behind = (D, d) => ({ x: D.x - Math.sin(D.h) * d, z: D.z - Math.cos(D.h) * d });
+  ok(G.BIKE_STANDS.length === 5 && G.DOCKS.length === 10 && BK().every((b, i) => b.d === i && !b.r), 'five bike stands across the campus, with two bikes docked at each');
+  let spread = true; G.BIKE_STANDS.forEach((a, i) => G.BIKE_STANDS.forEach((c, j) => { if (i !== j && Math.hypot(a.x - c.x, a.z - c.z) < 20) spread = false; }));
+  ok(spread && G.DOCKS.every(D => { const q = behind(D, 1.5); return G.cellTop(q.x, q.z) === 0 && !G.bikeHits(q.x, q.z, 0.28); }), 'the stands are spread round the grounds (20 m or more apart), each with room to wheel a bike out');
+  const D0 = G.DOCKS[0]; G.cam.yaw = 0; fresh(); let q0 = behind(D0, 1.5); pos.set(q0.x, 0, q0.z); frames(2, 16);
+  frames(30, 16); ok(G.useVerb() === 'Ride' && G.bikeHits(D0.x, D0.z, 0.1) && /take a bike · Welcome Arch stand, 2 bikes here/.test(getEl('#prompt').innerHTML), 'by a stand E takes a bike (the prompt names the stand and its bikes), and a docked bike is solid: you walk round it');
+  G.tryInteract(); frames(2, 16);
+  ok(G.ride.b === 0 && BK()[0].r === meK && BK()[0].d === -1 && P0.anim.ride && G.useVerb() === 'Return', 'E takes the bike: you sit on it, its dock is free, and Use now says Return');
+  pos.set(-30, 0, 41.5); P0.heading = Math.PI / 2; P0.root.rotation.y = Math.PI / 2; G.ride.v = 0; fresh();
+  keysDown('d'); frames(60, 50); const cruise = G.ride.v; keysDown('shift'); frames(40, 50); const fast = G.ride.v; const hardAct = Vt.act; keysUp('shift'); keysUp('d');
+  ok(near(cruise, 4.5, 0.05) && near(fast, 7, 0.05) && hardAct === 'cyclingHard', 'on the Green Loop you cruise at 16 km/h and pedal hard at 25 km/h, picking up speed like a real bike');
+  const h0 = P0.heading; keysDown('w'); frames(4, 50); keysUp('w'); const turned = Math.abs(G.angDiff(P0.heading, h0));
+  ok(turned > 0.35 && turned < 0.55, 'a bike steers into a turn instead of spinning on the spot (' + turned.toFixed(2) + ' rad in 0.2 s)');
+  keyTap(' '); frames(5, 16); ok(Math.abs(pos.y) < 1e-6 && G.ride.b === 0, 'Space rings the bell instead of jumping');
+  pos.set(5, 0, 19); P0.heading = 0; P0.root.rotation.y = 0; G.ride.v = 0; keysDown('s'); frames(50, 50); keysUp('s');
+  ok(pos.z > 20 && pos.z < 22.2 && G.cellTop(pos.x, pos.z) > -0.25, 'bikes stay on dry land: you stop at the lake shore (' + pos.z.toFixed(1) + ')');
+  pos.set(14, 0, 0.5); P0.heading = Math.PI / 2; P0.root.rotation.y = Math.PI / 2; G.ride.v = 0; keysDown('d'); frames(40, 50); keysUp('d');
+  ok(pos.x > 15.5 && pos.x < 17.2 && G.zoneAt(pos.x, pos.z) !== 'Pantry', 'no bikes indoors: you stop at the Pantry door (' + pos.x.toFixed(1) + ')');
+  frames(10, 50); G.tryInteract(); frames(1, 16); const lb = BK()[0];
+  ok(G.ride.b === null && lb.d === -1 && !lb.r && Math.hypot(lb.x - pos.x, lb.z - pos.z) > 0.6 && G.bikeHits(lb.x, lb.z, 0.1) && !P0.anim.ride, 'E away from a stand: you get off and the bike stays on its kickstand where you left it, solid');
+  ok(JSON.parse(store.ga_world).bikes[0].d === -1, 'where every bike is gets saved on this browser');
+  G.tryInteract(); frames(2, 16); ok(G.ride.b === 0, 'and E by that bike gets you back on');
+  G.tryInteract(); frames(2, 16);
+  const D4 = G.DOCKS[4]; q0 = behind(D4, 1.5); pos.set(q0.x, 0, q0.z); frames(2, 16); G.tryInteract(); frames(2, 16);
+  ok(G.ride.b === 4 && BK()[4].d === -1, 'at the Mobility Hub stand you take another bike');
+  q0 = behind(D0, 1.6); pos.set(q0.x, 0, q0.z); frames(2, 16); G.tryInteract(); frames(2, 16);
+  ok(G.ride.b === null && BK()[4].d === 0 && G.bikeHits(D0.x, D0.z, 0.1) && !G.bikeHits(pos.x, pos.z, 0.28), 'and return it to the Welcome Arch stand: any stand with a free dock takes any bike');
+  BK()[0].t = Date.now() - 11 * 60000; frames(50, 50);
+  ok(BK()[0].d === 4 && BK().every(b => b.d >= 0), 'a bike left out for 10 minutes is taken back to the nearest free dock');
+  pos.set(0, 0, 9.5); frames(5, 16);
+
+  console.log('Mouse look');
+  const doc = window.document, cv = G.cvs; let asked = 0;
+  cv.requestPointerLock = () => { asked++; doc.pointerLockElement = cv; }; doc.exitPointerLock = () => { doc.pointerLockElement = null; };
+  ok(!G.mouseLook.on, 'mouse look is off unless you turn it on (drag to look, as before)');
+  G.openMenu(false); const mLook = /id="mLook"/.test(getEl('#modalBody').innerHTML); G.closeModal();
+  G.setMouseLook(true); ok(mLook && G.mouseLook.on && JSON.parse(store.ga_mouselook) === true, 'the Menu has a Mouse look switch, and the choice is remembered on this browser');
+  cv.dispatch('pointerdown', { pointerId: 1, pointerType: 'mouse', clientX: 300, clientY: 300 }); cv.dispatch('pointerup', { pointerId: 1, pointerType: 'mouse', clientX: 300, clientY: 300 });
+  ok(asked === 1 && G.mouseLocked(), 'one click on the world captures the mouse');
+  const yaw0 = G.cam.yaw, pit0 = G.cam.pitch; window._l.mousemove.forEach(fn => fn({ movementX: 100, movementY: 20 }));
+  ok(near(G.cam.yaw, yaw0 - 0.65, 1e-6) && G.cam.pitch > pit0, 'then moving the mouse turns the camera, with no button held');
+  frames(30, 16); ok(!getEl('#crosshair').hidden, 'a crosshair marks the middle of the screen while the mouse is captured');
+  G.openMenu(false); ok(!G.mouseLocked(), 'opening a menu gives the cursor back for its buttons'); G.closeModal(); frames(30, 16);
+  const yaw1 = G.cam.yaw; window._l.mousemove.forEach(fn => fn({ movementX: 100, movementY: 0 }));
+  ok(G.cam.yaw === yaw1 && getEl('#crosshair').hidden, 'with the cursor back, moving the mouse doesn’t turn the camera and the crosshair hides');
+  G.setMouseLook(false); ok(!G.mouseLook.on && JSON.parse(store.ga_mouselook) === false, 'and the option turns off again');
+
   console.log('Duplicate email & returning user');
   G.logout();
   ok(G.state.mode === 'login' && !cookieJar.ga_session, 'logout clears session cookie');
@@ -651,6 +699,11 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   t.getEl('#tUse').dispatch('click'); TP.hold(T.FOODS[0].id); t.frames(30, 16);
   ok(!t.getEl('#tDrop').hidden && t.getEl('#tDrop').textContent === 'Drop' && !t.getEl('#tEat').hidden, 'holding food shows Eat and Drop');
   t.getEl('#tDrop').dispatch('click'); t.frames(30, 16); ok(!TP.held && t.getEl('#tDrop').hidden, 'Drop puts it down (same as Q)');
+  const TD = T.DOCKS[2]; TP.root.position.set(TD.x - Math.sin(TD.h) * 1.5, 0, TD.z - Math.cos(TD.h) * 1.5); t.frames(30, 16);
+  ok(t.getEl('#tUseV').textContent === 'Ride', 'by a bike stand the Use button says Ride');
+  t.getEl('#tUse').dispatch('click'); t.frames(30, 16);
+  ok(T.ride.b === 2 && t.getEl('#tJump').textContent === 'Bell' && t.getEl('#tUseV').textContent === 'Return', 'on a bike Jump becomes Bell, and Use says Return by a stand');
+  T.setMouseLook(true); ok(!T.mouseLook.on, 'mouse look is a desktop option: phones and tablets keep drag to look');
 
   await new Promise(r => setTimeout(r, 300));
   done();

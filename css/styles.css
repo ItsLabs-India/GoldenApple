@@ -319,6 +319,10 @@ legend{padding:0 0 4px;font-family:var(--f-body);font-size:15px;font-weight:700;
 .touch-ui .hud-tl,.touch-ui .hud-tr,.touch-ui .catch,.touch-ui #card{z-index:3}
 .touch-ui #hud.card-open #touch,.touch-ui #hud.card-open .prompt{display:none}
 .more-btn{display:none}
+/* mouse look: a crosshair in the middle of the screen while the mouse is captured */
+.crosshair{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;pointer-events:none;z-index:4}
+.crosshair::before,.crosshair::after{content:"";position:absolute;background:var(--cream);box-shadow:0 0 0 1px rgba(0,0,0,.7)}
+.crosshair::before{left:9px;top:2px;width:2px;height:16px}.crosshair::after{left:2px;top:9px;width:16px;height:2px}
 /* phones (html.phone-ui): the HUD starts small; tap your panel, the map or the menu button to see more */
 .phone-ui .hud-tl{top:8px;left:max(8px,env(safe-area-inset-left,0px));width:auto;gap:6px;align-content:start;justify-items:start}
 .phone-ui .hud-tr{top:8px;right:max(8px,env(safe-area-inset-right,0px));width:96px;transition:width .15s}

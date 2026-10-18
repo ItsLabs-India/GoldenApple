@@ -328,6 +328,11 @@ const RING=[];for(let i=0;i<8;i++){const a=i*Math.PI/4;RING.push({x:Math.sin(a)*
 // eco campus areas outside the buildings (decoration and HUD names only; see the Eco campus block in buildFurniture)
 const ECO_AREAS=[{name:'Kitchen Garden',x0:-39,x1:-18,z0:-41,z1:-32},{name:'Solar Grove',x0:17,x1:39,z0:-41,z1:-32},{name:'Wind Row',x0:33,x1:40,z0:-31,z1:-10},
   {name:'Mobility Hub',x0:34,x1:45,z0:-10,z1:7},{name:'Heritage Orchard',x0:-39,x1:-22,z0:11,z1:40},{name:'Wildflower Meadow',x0:-39,x1:-32,z0:-31,z1:8}];
+// campus bike stands: centre, the way the docked bikes point (front wheel into the rack) and the side the kiosk stands on;
+// DOCKS (two per stand) are filled by buildFurniture, the bikes themselves by initBikes (see Campus bikes)
+const BIKE_STANDS=[{name:'Welcome Arch',x:6.6,z:13.0,h:Math.PI/2,ks:-1},{name:'Work Desks',x:-8.0,z:-10.6,h:Math.PI/2,ks:-1},{name:'Mobility Hub',x:35.9,z:-10.5,h:Math.PI/2,ks:-1},
+  {name:'Lakeside South',x:16.2,z:40.0,h:Math.PI/2,ks:1},{name:'Wildflower Meadow',x:-36.4,z:-3.0,h:Math.PI/2,ks:1}];
+const DOCKS=[];// {s (stand), x, z (where the docked bike stands), h, px, pz (its dock light)}
 function ringPath(a,b){const out=[];let d=((b-a)%8+8)%8;const step=d<=4?1:-1;if(d>4)d=8-d;for(let k=0;k<=d;k++)out.push(RING[((a+step*k)%8+8)%8]);return out;}
 
 const BLOCKS={};for(const k in BLOCK_TYPES)BLOCKS[k]=[];
@@ -910,7 +915,7 @@ function buildFurniture(){
     for(const a of [-0.66,0.66])for(const b of [-1.62,1.62])fbox(sx+a,1.3,sz+b,0.06,1.3,0.06,'#c5ccd2');fbox(sx,1.97,sz,1.45,0.08,3.4,'#f4f1ea');fbox(sx,2.02,sz,1.2,0.03,2.8,'#1d3557');
     for(const a of [-0.72,0.72])for(const b of [-1.15,1.15])fbox(sx+a,0.27,sz+b,0.2,0.54,0.54,'#1c1c24');
     fbox(sx,1.4,sz+1.72,1.3,0.7,0.03,'#cfeeff','glass');fbox(sx,1.86,sz+1.74,1.0,0.14,0.02,'#f2b632','glow');propClose(0);solidRect(sx-0.75,sz-1.8,sx+0.75,sz+1.8,2.0);}
-  info(38.9,-8.6,Math.PI/2,'Mobility Hub',['Solar carport: 11 bike racks','2 EV bays, solar charged','6-seat electric shuttle','Walk, cycle or share a ride']);
+  info(38.9,-8.6,Math.PI/2,'Mobility Hub',['Campus bikes: 5 stands, 10','bikes. Ride, then return to','any stand · 2 EV bays','6-seat electric shuttle']);
   planter(34.4,-0.5,0.7,15,'#f2b632');
 
   // Kitchen Garden: a greenhouse, raised beds, compost bays, a tool shed with a green roof and rain barrels
@@ -981,10 +986,21 @@ function buildFurniture(){
     const ox=8,oy=36,S=1.8,at=(x,z)=>[ox+(x+HALF)*S,oy+(z+HALF)*S];
     for(let cx=-HALF;cx<HALF;cx++)for(let cz=-HALF;cz<HALF;cz++){const t=getTile(cx,cz),tp=tileTop(cx,cz);g.fillStyle=tp>=99?'#2e6a24':(tp>=2&&t!=='hedge')?'#efe8da':(MAPC[t]||'#5aa83a');g.fillRect(ox+(cx+HALF)*S,oy+(cz+HALF)*S,S+0.2,S+0.2);}
     g.textAlign='center';g.font='700 9px '+FONT_UI;LEGEND.forEach(([n,x,z],i)=>{const [px,py]=at(x,z);g.fillStyle='#1d2a17';g.fillRect(px-6,py-6,12,12);g.fillStyle='#ffffff';g.fillText(String(i+1),px,py+3.5);});
+    for(const S of BIKE_STANDS){const [px,py]=at(S.x,S.z);g.fillStyle='#4fd3ff';g.fillRect(px-4,py-4,8,8);g.strokeStyle='#1d2a17';g.lineWidth=1;g.strokeRect(px-4,py-4,8,8);}
     const [yx,yy]=at(MX,MZ);g.fillStyle='#e0442e';g.fillRect(yx-4,yy-4,8,8);g.strokeStyle='#ffffff';g.lineWidth=1.5;g.strokeRect(yx-4,yy-4,8,8);
     g.textAlign='left';g.font='400 10.5px '+FONT_UI;LEGEND.forEach(([n],i)=>{g.fillStyle='#1d2a17';g.fillText((i+1)+'  '+n,192,48+i*10.6);});
-    g.fillStyle='#e0442e';g.fillRect(192,206,8,8);g.fillStyle='#1d2a17';g.font='700 10.5px '+FONT_UI;g.fillText('You are here',204,214);});
+    g.fillStyle='#e0442e';g.fillRect(192,206,8,8);g.fillStyle='#1d2a17';g.font='700 10.5px '+FONT_UI;g.fillText('You are here',204,214);
+    g.fillStyle='#4fd3ff';g.fillRect(282,206,8,8);g.fillStyle='#1d2a17';g.fillText('Bike stand',294,214);});
   mapM.position.set(MX,1.5,MZ);mapM.rotation.y=Math.PI;scene.add(mapM);
+
+  // Campus Bikes: five stands across the grounds, each a paved pad, a rail with two docking posts and a solar-capped kiosk
+  BIKE_STANDS.forEach((S,s)=>{const fx=Math.sin(S.h),fz=Math.cos(S.h),rx=Math.cos(S.h),rz=-Math.sin(S.h);
+    fbox(S.x+fx*0.1,0.012,S.z+fz*0.1,1.9,0.02,2.5,'#a3ae95','noise',S.h);fbox(S.x+fx*0.98,0.35,S.z+fz*0.98,1.7,0.06,0.06,'#3a3d44','noise',S.h);
+    for(const k of [0,1]){const o=(k-0.5)*0.8,x=S.x+rx*o,z=S.z+rz*o,px=x+fx*0.98,pz=z+fz*0.98;
+      fbox(px,0.45,pz,0.14,0.9,0.14,'#3f7d34');fbox(px,0.82,pz,0.2,0.12,0.2,'#2b2d33');DOCKS.push({s,x,z,h:S.h,px:px-fx*0.11,pz:pz-fz*0.11,light:null});}
+    S.kx=S.x+rx*S.ks*1.35+fx*0.6;S.kz=S.z+rz*S.ks*1.35+fz*0.6;
+    propOpen('bikeKiosk');fbox(S.kx,0.9,S.kz,0.36,1.8,0.36,'#3f7d34');fbox(S.kx,1.84,S.kz,0.5,0.08,0.5,'#1d3557');propClose(0);
+    solidBox(S.x+fx*0.98,S.z+fz*0.98,1.8,0.25,S.h,1);solidRect(S.kx-0.2,S.kz-0.2,S.kx+0.2,S.kz+0.2,2);});
 
   // wayfinding, recycling and water refill points along the main paths
   finger(-3.6,7.6,[[-Math.PI/2,'Orchard'],[Math.PI/2,'Playground'],[Math.PI,'Plaza'],[0,'Lakeside']]);
@@ -1103,7 +1119,7 @@ function buildDoors(){
 function updateDoors(dt){
   for(const D of DOORS){let near=false;
     for(const ch of state.chars.values()){if(!ch.root.visible)continue;const q=ch.root.position;if(Math.abs(q.x-D.x)<2.6&&Math.abs(q.z-D.z)<2.6&&q.y>-0.5&&q.y<1.5){near=true;break;}}
-    if(near!==D.want){D.want=near;const P=state.player;if(P&&Math.hypot(P.root.position.x-D.x,P.root.position.z-D.z)<12)sfx('door');}
+    if(near!==D.want){D.want=near;const P=state.player;if(P&&Math.hypot(P.root.position.x-D.x,P.root.position.z-D.z)<12)sfx('slide');}
     D.open+=((near?1:0)-D.open)*Math.min(1,dt*(near?7:3.5));// opens briskly, closes gently
     for(const l of D.leaves)l.L.position.x=l.sgn*(l.hw+D.open*(D.w/2-0.1));}
 }
@@ -1436,6 +1452,7 @@ class Character{
     else if(a.pose==='wash'){aRx=-1.0+Math.sin(a.t*6)*0.12;aLx=-1.0+Math.cos(a.t*6)*0.12;hX=0.28;}
     else if(a.pose==='coffee'){aRx=-1.25+Math.sin(a.t*1.2)*0.05;hX=0.12;}
     else if(a.pose==='look'){hX=-0.08;}
+    if(a.ride){a.pedal=(a.pedal||0)+dt*a.speed*1.9;const s=Math.sin(a.pedal);lR=-0.55+s*0.5;lL=-0.55-s*0.5;aRx=aLx=-1.2;aRz=aLz=0;hipX=0.35;hX=-0.25;hY=0;bob=BIKE.lift;}// on the saddle, pedalling
     if(a.gym&&GYM_KINDS[a.gym.k]){const g=a.gym,K=GYM_KINDS[g.k];if(!g.rest)g.ph+=dt*K.rate[g.lvl];const s=Math.sin(g.ph),q=g.rest?0:(1-Math.cos(g.ph))/2,L=g.lvl;
       this.gymProp(K.prop&&!g.rest?K.prop:null);bob=0;aRz=aLz=0;hY=0;hX=0;hipX=0;
       if(g.k==='treadmill'){const am=[0.45,0.62,0.85][L],bend=[0,0.35,0.7][L];lR=s*am;lL=-lR;aRx=-lR*0.9-bend;aLx=lR*0.9-bend;hipX=L*0.08;bob=Math.abs(s)*0.04*(1+L*0.7);}
@@ -1651,7 +1668,8 @@ function sfx(name,o){
     case 'boop':tone(F,700,t,0.1,{to:500,v:0.04});break;
     case 'ui':tone(F,1100,t,0.03,{type:'square',v:0.018,lp:3000});break;
     case 'open':tone(F,620,t,0.09,{type:'triangle',to:930,v:0.05});break;
-    case 'door':hiss(F,t,0.45,{type:'bandpass',f:750,v:0.035,a:0.1});break;// a sliding door's soft rush
+    case 'bell':tone(F,2350,t,0.22,{type:'sine',v:0.07});tone(F,2350,t+0.17,0.32,{type:'sine',v:0.06});break;// a bike bell, ding-ding
+    case 'slide':hiss(F,t,0.45,{type:'bandpass',f:750,v:0.035,a:0.1});break;// a sliding door's soft rush
     case 'close':tone(F,930,t,0.09,{type:'triangle',to:620,v:0.04});break;
     case 'pick':tone(F,520,t,0.08,{to:900,v:0.05});hiss(F,t,0.03,{f:3000,v:0.03});break;
     case 'putdown':tone(F,200,t,0.06,{type:'triangle',v:0.05});hiss(F,t,0.05,{type:'lowpass',f:700,v:0.06});break;
@@ -1725,7 +1743,9 @@ const ACT={
   workout:{hp:-3,en:-6,label:'Working out'},// the real cost comes from the machine and level (GYM_KINDS)
   showering:{hp:-1,en:0,label:'Showering'},
   sport:{hp:-2.6,en:-4.5,label:'Playing a match'},// × how hard you move (see updateVitals)
-  washing:{hp:-1,en:-0.8,label:'Washing your hands'}
+  washing:{hp:-1,en:-0.8,label:'Washing your hands'},
+  cycling:{hp:-1.8,en:-2.6,label:'Cycling'},// an easy ride costs about a brisk walk, pedalling hard close to a run
+  cyclingHard:{hp:-2.6,en:-5,label:'Cycling hard'}
 };
 // the body, per minute: food digests into health (and a little energy), drinks reach the bladder, caffeine kicks in then wears off
 const BL_BASE=0.8,DIGEST=12,DIGEST_EN=5,FLUID=8,CAF_IN=15,CAF_OUT=4,FULL_AT=40,JUMP_COST=0.4;
@@ -1774,6 +1794,7 @@ function currentActivity(P){
   if(arc.open)return 'gaming';if(gym.use)return 'workout';if(mt.on)return 'sport';if(rr.use)return rr.use.S.kind==='shower'?'showering':'restroom';if(rr.wash)return 'washing';if(P.eating)return 'eating';
   if(fishing.phase==='reel')return 'reeling';if(fishing.phase)return 'fishing';
   if(P.seat)return P.seat.desk?'working':'resting';
+  if(ride.b!=null)return ride.v>0.3?(ride.hard?'cyclingHard':'cycling'):'idle';
   if(P.anim.speed>0.1)return P.inWater?'swimming':P.anim.run?'running':'walking';
   return 'idle';
 }
@@ -2247,7 +2268,7 @@ function useArcade(A){
   startArcade(A.i,1,null);
 }
 function startArcade(c,slot,host){
-  const P=state.player,A=ARCADES[c];if(P.held)P.dropHeld();if(P.rodMesh)stowRod(false);endFishing();if(P.seat)standUp();
+  releaseMouse();const P=state.player,A=ARCADES[c];if(P.held)P.dropHeld();if(P.rodMesh)stowRod(false);endFishing();if(P.seat)standUp();
   Object.assign(arc,{open:true,c,lastC:c,slot,host,p2:null,st:slot===1?gameOf(c).init(false):null,acc:0,frame:0,p2in:0,heard:0,lastIn:-1,inT:0,saved:false,msg:'',msgT:0});
   P.root.position.set(A.spot.x,A.sit?A.seatY-HIP:0,A.spot.z);P.heading=A.face;P.root.rotation.y=A.face;P.anim.play=true;P.anim.pose=A.sit?'sit':'stand';keys.clear();arcKeys.clear();closeCard();
   $('#arcade').hidden=false;$('#arcPad').hidden=!coarse;renderArcBar();sfx('g_start');
@@ -2512,7 +2533,7 @@ function onMatchDm(from,d){
 }
 /* ---------- the match ---------- */
 function startMatch(c,side,opp,server){
-  const P=state.player,C=COURTS[c];if(!P)return;if(P.held&&!P.eating)putDownFood();if(P.rodMesh)stowRod(false);
+  const P=state.player,C=COURTS[c];if(!P)return;if(P.held&&!P.eating)putDownFood();if(P.rodMesh)stowRod(false);leaveBike();
   Object.assign(mt,{on:true,c,side,opp,sc:[0,0],server,phase:'serve',ball:null,seq:0,pseq:0,pause:0,swing:0,hitThis:false,serveT:0,lost:0,over:false,end:null,inv:null,out:null,myHit:null});
   P.anim.sport=C.sport;cam.yaw=side===0?Math.PI:0;cam.pitch=0.42;cam.dist=9;startPoint();sfx('whistle');closeCard();
   toast('Match on: you vs '+esc(nameOfKey(opp))+' · '+SPORT[C.sport].name+', first to '+WIN_AT+' (win by 2). '+(coarse?'Swing to hit, Leave to stop.':'Space swings, Q leaves.'),'',4500);
@@ -2656,6 +2677,138 @@ function courtPrompt(cv,kh){
 $('#mLeave').addEventListener('click',()=>quitMatch());
 
 /* =========================================================
+   Campus bikes: five stands round the grounds, two bikes each. Take one (E), ride anywhere outdoors and return it to
+   any stand with a free dock, or get off anywhere and leave it on its kickstand. The bikes are shared: alone they are
+   saved in ga_world; in a room the host owns them (guests ask with {t:'bike'}, everyone gets {t:'bikes'}). A bike left
+   out for 10 minutes goes back to the nearest stand, as a campus bike team would do.
+   ========================================================= */
+// real city-bike numbers: 16 km/h cruising, 25 km/h pedalling hard, gentle acceleration, a turn of about 2 m radius, a 0.95 m saddle
+const BIKE={n:10,cruise:4.5,fast:7,accel:2.2,brake:4.5,turn:2.4,lift:0.95-HIP,len:0.85,half:0.3,back:600000};
+const DOCK_MAT={bike:new THREE.MeshBasicMaterial({color:0x6cff8a}),free:new THREE.MeshLambertMaterial({color:0x5a5f6a})};
+const ride={b:null,v:0,hard:false,tipT:0};// your ride: which bike and how fast along your heading
+let BIKES=[],bikeT=0;const bikeMeshes=[];// shared list: {d: dock or -1, r: rider key or null, x,z,h: where a loose bike stands, t: when it was left}
+const bikesDefault=()=>Array.from({length:BIKE.n},(_,i)=>({d:i,r:null,x:0,z:0,h:0,t:0}));
+const angDiff=(a,b)=>((a-b+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;
+const bikeAt=B=>B.d>=0?DOCKS[B.d]:B;
+// no bikes in the rooms or on the courts
+function bikeZone(x,z){for(const k of ['desks','pantry','restroom','playroom','gym','play']){const Z=ZONES[k];if(x>=Z.x0&&x<Z.x1+1&&z>=Z.z0&&z<Z.z1+1)return k;}return '';}
+// a bike stands only on dry, level, open ground outdoors
+function bikeSpotOK(x,z){return Number.isFinite(x)&&Number.isFinite(z)&&Math.abs(x)<44&&Math.abs(z)<44&&!bikeZone(x,z)&&cellTop(x,z)>-0.25&&areaTop(x-0.2,z-0.2,x+0.2,z+0.2)<0.3;}
+// docked and parked bikes are solid (1.7 m long, 0.6 m wide); ridden ones move with their rider
+function bikeHits(x,z,r){for(const B of BIKES){if(B.r)continue;const q=bikeAt(B),dx=x-q.x,dz=z-q.z,u=dx*Math.sin(q.h)+dz*Math.cos(q.h),v=dx*Math.cos(q.h)-dz*Math.sin(q.h);if(Math.abs(u)<BIKE.len+r&&Math.abs(v)<BIKE.half+r)return true;}return false;}
+function nearestFreeDock(x,z,max){let best=-1,bd=max==null?1e9:max;DOCKS.forEach((D,j)=>{if(BIKES.some(B=>B.d===j))return;const d=Math.hypot(D.x-x,D.z-z);if(d<bd){bd=d;best=j;}});return best;}
+// checks a saved or received list: each bike is in one dock, ridden (only as sent by the host), or parked on open ground; anything else goes back to a free dock
+function bikesClean(a,keepRiders){
+  const out=bikesDefault().map(B=>Object.assign(B,{d:-2})),used=new Set();
+  if(Array.isArray(a))a.slice(0,BIKE.n).forEach((s,i)=>{if(!s||typeof s!=='object')return;const B=out[i];
+    if(Number.isInteger(s.d)&&s.d>=0&&s.d<DOCKS.length&&!used.has(s.d)){B.d=s.d;used.add(s.d);}
+    else if(keepRiders&&typeof s.r==='string'&&s.r)Object.assign(B,{d:-1,r:s.r,x:+s.x||0,z:+s.z||0,h:+s.h||0});
+    else if(s.d===-1&&!s.r&&bikeSpotOK(+s.x,+s.z))Object.assign(B,{d:-1,x:+s.x,z:+s.z,h:+s.h||0,t:+s.t||Date.now()});});
+  out.forEach((B,i)=>{if(B.d!==-2)return;const d=used.has(i)?DOCKS.findIndex((_,j)=>!used.has(j)):i;B.d=d;used.add(d);});
+  return out;}
+// the rules (alone, or the host for everyone): take a free bike, return it to a free dock, or leave it on open ground
+function bikeRule(k,op,b,a){const B=BIKES[b];if(!B||!k)return false;a=a||{};
+  if(op==='take'){if(B.r||BIKES.some(o=>o.r===k))return false;if(B.d>=0){const D=DOCKS[B.d];Object.assign(B,{x:D.x-Math.sin(D.h)*0.9,z:D.z-Math.cos(D.h)*0.9,h:D.h+Math.PI});}B.r=k;B.d=-1;return true;}// rolled back out of its dock
+  if(B.r!==k)return false;
+  if(op==='dock'){if(!Number.isInteger(a.d)||!DOCKS[a.d]||BIKES.some(o=>o.d===a.d))return false;B.r=null;B.d=a.d;return true;}
+  if(op==='park'){if(!bikeSpotOK(+a.x,+a.z))return false;Object.assign(B,{r:null,d:-1,x:+a.x,z:+a.z,h:+a.h||0,t:Date.now()});return true;}
+  return false;}
+// you: alone or as the host the rules run here; a guest asks the host (and gets off straight away)
+function bikeDo(op,b,a){
+  if(room.mode==='guest'){if(!roomSend({t:'bike',op,b,a}))return false;if(op!=='take'){const B=BIKES[b];if(op==='dock')Object.assign(B,{r:null,d:a.d});else Object.assign(B,{r:null,d:-1,x:a.x,z:a.z,h:a.h,t:Date.now()});applyBikes();}return true;}
+  if(!bikeRule(myKey(),op,b,a))return false;bikesChanged();return true;}
+function bikesChanged(){saveBikes();if(room.mode==='host')broadcast({t:'bikes',b:BIKES});applyBikes();}
+function saveBikes(){if(room.mode==='host'&&room.data){room.data.bikes=BIKES;saveRoomData();}else if(!room.mode){WORLD.bikes=BIKES;Store.set('ga_world',WORLD);}}
+// a campus bike: green frame, white mudguards, a front basket, lights; it points along its +z
+function buildBikeMesh(){const g=new THREE.Group(),wheels=[],c='#3f8f3f';
+  for(const z of [-0.53,0.53]){const W=grp(g,0,0.34,z);for(const q of [0,Math.PI/4])db(W,0,0,0,0.05,0.62,0.62,'#2b2d33').rotation.x=q;const S=grp(W,0,0,0);db(S,0,0,0,0.055,0.5,0.06,'#c5ccd2');db(S,0,0,0,0.055,0.06,0.5,'#c5ccd2');wheels.push(S);}
+  db(g,0,0.78,0.06,0.06,0.06,0.66,c);db(g,0,0.56,0.02,0.06,0.06,0.64,c);db(g,0,0.62,-0.24,0.06,0.56,0.06,c);db(g,0,0.72,0.4,0.06,0.44,0.06,c);db(g,0,0.36,-0.38,0.05,0.05,0.3,c);
+  for(const z of [-0.53,0.53])db(g,0,0.7,z,0.12,0.04,0.46,'#f4f1ea');
+  db(g,0,0.95,-0.25,0.14,0.06,0.28,'#2b2d33');db(g,0,0.86,-0.25,0.04,0.14,0.04,'#9aa3aa');db(g,0,1.0,0.42,0.58,0.05,0.06,'#2b2d33');db(g,0,0.9,0.66,0.4,0.24,0.3,'#f2b632');
+  db(g,0,0.7,-0.84,0.08,0.06,0.03,'#e0442e','g');db(g,0,0.86,0.82,0.1,0.07,0.03,'#ffe9b0','g');
+  scene.add(g);return{g,wheels};}
+function initBikes(){
+  BIKE_STANDS.forEach((S,s)=>{const c=textCanvas(200,120,()=>{},2),tex=textTex(c),m=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.37),new THREE.MeshBasicMaterial({map:tex}));
+    m.position.set(S.kx-Math.sin(S.h)*0.2,1.45,S.kz-Math.cos(S.h)*0.2);m.rotation.y=S.h+Math.PI;scene.add(m);
+    S.draw=()=>{const g=c.getContext('2d'),docks=[2*s,2*s+1],n=docks.filter(j=>BIKES.some(B=>B.d===j)).length;
+      g.fillStyle='#f3ead2';g.fillRect(0,0,200,120);g.fillStyle='#3f7d34';g.fillRect(0,0,200,30);leafIcon(g,14,15,9);g.fillStyle='#ffffff';g.textAlign='left';g.font='700 15px '+FONT_UI;g.fillText('CAMPUS BIKES',28,21);
+      g.fillStyle='#2a1a0c';g.font='700 13px '+FONT_UI;g.fillText(S.name,10,48);g.font='400 12px '+FONT_UI;g.fillText(plural(n,'bike')+' · '+plural(2-n,'free dock'),10,67);
+      docks.forEach((j,k)=>{g.fillStyle=BIKES.some(B=>B.d===j)?'#3f8f3f':'#c9c2b0';g.fillRect(10+k*34,78,28,14);});
+      g.fillStyle='#7a6a52';g.font='400 10px '+FONT_UI;g.fillText('Ride anywhere outside,',84,86);g.fillText('return to any stand',84,100);tex.needsUpdate=true;};
+    SIGN_DRAWERS.push(()=>S.draw());});
+  for(const D of DOCKS){const l=new THREE.Mesh(UNIT_BOX,DOCK_MAT.free);l.scale.set(0.12,0.08,0.04);l.position.set(D.px,0.86,D.pz);l.rotation.y=D.h;scene.add(l);D.light=l;}
+  for(let i=0;i<BIKE.n;i++)bikeMeshes.push(buildBikeMesh());
+  BIKES=bikesClean(WORLD.bikes,false);if(!room.mode)WORLD.bikes=BIKES;applyBikes();
+}
+// shows the shared list: docked bikes upright in their dock, loose ones on their kickstand; mounts or dismounts you to match it
+function applyBikes(){
+  BIKES.forEach((B,i)=>{const M=bikeMeshes[i];if(!M||B.r)return;const q=bikeAt(B);M.g.visible=true;M.g.position.set(q.x,0,q.z);M.g.rotation.set(0,q.h,B.d>=0?0:0.12);});
+  for(const [j,D] of DOCKS.entries())if(D.light)D.light.material=BIKES.some(B=>B.d===j)?DOCK_MAT.bike:DOCK_MAT.free;
+  for(const S of BIKE_STANDS)if(S.draw)S.draw();
+  const me=state.me?myKey():null,mine=me?BIKES.findIndex(B=>B.r===me):-1;
+  if(mine>=0&&ride.b!==mine)mountBike(mine);else if(mine<0&&ride.b!=null){ride.b=null;ride.v=0;}
+}
+function mountBike(i){const P=state.player,B=BIKES[i];if(!P)return;if(P.seat)standUp();ride.b=i;ride.v=0;
+  P.heading=B.h;P.root.rotation.y=B.h;const x=B.x-Math.sin(B.h)*0.25,z=B.z-Math.cos(B.h)*0.25;P.root.position.set(x,Math.max(0,supportY(x,z)),z);P.vy=0;P.onGround=true;
+  sfx('pick');P.say('Off we go!',1200);}
+function nearestBike(){const P=state.player;if(!P)return null;const p=P.root.position;let best=null,bd=1.7;BIKES.forEach((B,i)=>{if(B.r)return;const q=bikeAt(B),d=Math.hypot(q.x-p.x,q.z-p.z);if(d<bd){bd=d;best=i;}});return best;}
+function takeBike(i){const P=state.player;
+  if(P.held){P.say('Put your food down before you ride.',1600);sfx('deny');return;}if(P.rodMesh){P.say('Put the rod back first.',1600);sfx('deny');return;}
+  if(!bikeDo('take',i))toast('That bike was just taken.','',1800);}
+// E while riding: into a free dock if a stand is right here, otherwise get off and leave it on its kickstand
+function endRide(){const P=state.player,i=ride.b;if(!P||i==null)return;const p=P.root.position,h=P.heading,d=nearestFreeDock(p.x,p.z,2.6);
+  if(d>=0){const D=DOCKS[d];if(bikeDo('dock',i,{d})){P.root.position.set(D.x-Math.sin(D.h)*1.4,0,D.z-Math.cos(D.h)*1.4);P.heading=D.h;sfx('putdown');P.say('Bike returned.',1200);}return;}
+  const cx=p.x+Math.sin(h)*0.25,cz=p.z+Math.cos(h)*0.25;let off=null;
+  for(const s of [1,-1]){const x=p.x+Math.cos(h)*s*0.75,z=p.z-Math.sin(h)*s*0.75;if(!blocked(x,z,p.y)&&!bikeZone(x,z)){off={x,z};break;}}
+  if(!off||!bikeDo('park',i,{x:cx,z:cz,h})){P.say('No room to leave the bike here.',1600);sfx('deny');return;}
+  p.x=off.x;p.z=off.z;sfx('putdown');}
+// leaving the world (or starting a match) while riding: the bike stays where you were, or goes to the nearest free dock
+function leaveBike(){const P=state.player,i=ride.b;if(!P||i==null)return;const h=P.heading,x=P.root.position.x+Math.sin(h)*0.25,z=P.root.position.z+Math.cos(h)*0.25,ok=bikeSpotOK(x,z);ride.b=null;ride.v=0;
+  if(room.mode==='guest'){if(ok)bikeDo('park',i,{x,z,h});else bikeDo('dock',i,{d:nearestFreeDock(x,z)});return;}
+  const B=BIKES[i];B.r=null;if(ok)Object.assign(B,{d:-1,x,z,h,t:Date.now()});else B.d=nearestFreeDock(x,z);bikesChanged();}
+// the host: a guest who leaves while riding leaves the bike where they were
+function bikeRiderLeft(k){const i=BIKES.findIndex(B=>B.r===k);if(i<0)return;const B=BIKES[i],ch=state.chars.get('local:'+k),q=ch&&ch.root.position;B.r=null;
+  const h=ch?ch.root.rotation.y:0,x=q?q.x+Math.sin(h)*0.25:NaN,z=q?q.z+Math.cos(h)*0.25:NaN;
+  if(bikeSpotOK(x,z))Object.assign(B,{d:-1,x,z,h,t:Date.now()});else B.d=nearestFreeDock(B.x,B.z);bikesChanged();}
+// alone or as host: riders who aren't here any more let go, and a bike left out for 10 minutes goes back to the nearest stand
+function tidyBikes(){const now=Date.now(),me=state.me?myKey():null;let changed=false;
+  for(const B of BIKES){if(B.r&&B.r!==me&&!(room.mode==='host'&&room.online.has(B.r))){B.r=null;B.d=nearestFreeDock(B.x,B.z);changed=true;}
+    else if(!B.r&&B.d<0&&now-B.t>BIKE.back){B.d=nearestFreeDock(B.x,B.z);changed=true;}}
+  if(changed)bikesChanged();}
+// a bike rolls only on dry, level, open ground outdoors: its body, front wheel and back wheel are each checked
+function bikeBlocked(x,z,y,h){const fx=Math.sin(h),fz=Math.cos(h);
+  for(const [px,pz,r] of [[x,z,0.28],[x+fx*1.0,z+fz*1.0,0.15],[x-fx*0.5,z-fz*0.5,0.15]]){
+    if(areaTop(px-r,pz-r,px+r,pz+r)>y+0.2||bikeHits(px,pz,r))return 'solid';if(cellTop(px,pz)<-0.25)return 'water';const zn=bikeZone(px,pz);if(zn)return zn;}
+  return '';}
+function bikeTip(why){if(ride.tipT>0||why==='solid')return;ride.tipT=3;
+  state.player.say(why==='water'?'Bikes stay on dry land.':why==='play'?'No bikes on the courts.':(coarse?'Tap Get off':'Press E to get off')+' before going inside.',1800);}
+// riding: you steer towards where you push (a bike turns, it can't sidestep), speed builds and drops like a real bike, and Shift pedals hard
+function rideStep(P,dt,ix,iz,len){
+  const p=P.root.position,mx=Math.cos(cam.yaw)*ix+Math.sin(cam.yaw)*iz,mz=-Math.sin(cam.yaw)*ix+Math.cos(cam.yaw)*iz,want=Math.min(1,len),hard=(keys.has('shift')||joy.run)&&canRun();
+  let target=0;
+  if(want>0.08){const d=angDiff(Math.atan2(mx,mz),P.heading);P.heading+=clamp(d,-BIKE.turn*dt,BIKE.turn*dt);if(Math.abs(d)<1.6)target=(hard?BIKE.fast:BIKE.cruise)*want*vitalSpeed();}
+  ride.v+=clamp(target-ride.v,-BIKE.brake*dt,BIKE.accel*dt);ride.hard=hard&&ride.v>BIKE.cruise*0.9;
+  if(ride.v>0.01){const nx=p.x+Math.sin(P.heading)*ride.v*dt,nz=p.z+Math.cos(P.heading)*ride.v*dt,why=bikeBlocked(nx,nz,p.y,P.heading);
+    if(why||bump(p.x,p.z,nx,nz)){if(ride.v>2.5)sfx('land');ride.v=0;if(why)bikeTip(why);}else{p.x=nx;p.z=nz;}}
+  p.y=Math.max(0,supportY(p.x,p.z));P.vy=0;P.onGround=true;jumpQueued=false;
+  P.anim.speed=ride.v;P.anim.run=false;P.anim.air=false;P.anim.pose='stand';
+}
+function updateBikes(dt){
+  ride.tipT=Math.max(0,ride.tipT-dt);const me=state.me?myKey():null,riders=new Set();
+  BIKES.forEach((B,i)=>{const M=bikeMeshes[i];if(!M||!B.r)return;const ch=B.r===me?state.player:state.chars.get('local:'+B.r);
+    if(!ch||!ch.root.visible){M.g.visible=false;return;}// the rider isn't here (yet)
+    riders.add(ch);M.g.visible=true;const p=ch.root.position,h=ch.root.rotation.y;
+    M.g.position.set(p.x+Math.sin(h)*0.25,ch===state.player?p.y:(ch.baseY||0),p.z+Math.cos(h)*0.25);M.g.rotation.set(0,h,0);
+    for(const w of M.wheels)w.rotation.x+=dt*(ch.anim.speed||0)/0.33;});
+  for(const ch of state.chars.values())ch.anim.ride=riders.has(ch);
+  if(room.mode!=='guest'){bikeT-=dt;if(bikeT<=0){bikeT=2;tidyBikes();}}
+}
+function bikePrompt(kh){const p=state.player.root.position,d=nearestFreeDock(p.x,p.z,2.6);
+  return 'Riding · '+Math.round(ride.v*3.6)+' km/h · '+kh+(d>=0?' to return the bike here':' to get off')+(coarse?'':' · <span class="key">Space</span> bell · <span class="key">Shift</span> pedal hard');}
+function bikeNearPrompt(i,kh){const B=BIKES[i];if(B.d<0)return kh+' to ride this bike';const s=DOCKS[B.d].s,n=[2*s,2*s+1].filter(j=>BIKES.some(o=>o.d===j)).length;
+  return kh+' to take a bike · '+esc(BIKE_STANDS[s].name)+' stand, '+plural(n,'bike')+' here';}
+
+/* =========================================================
    Player, camera, input
    ========================================================= */
 const cam={yaw:0,pitch:0.55,dist:10.5,target:new THREE.Vector3(0,0,-4),attract:0};
@@ -2671,6 +2824,7 @@ function updatePlayer(dt){
   ix+=joy.x;iz+=joy.y;const len=Math.hypot(ix,iz);if(len>1){ix/=len;iz/=len;}
   const moving=len>0.08;
   if(rr.use||arc.open||gym.use){jumpQueued=false;P.anim.speed=0;P.anim.run=false;return;}
+  if(ride.b!=null){rideStep(P,dt,ix,iz,len);return;}
   if(fishing.phase==='cast'||fishing.phase==='reel'||fishing.phase==='caught'){jumpQueued=false;P.anim.speed=0;return;}
   if((fishing.phase==='wait'||fishing.phase==='bite')&&(moving||jumpQueued)){endFishing();P.say('Reeled in.',1000);}
   if(rr.wash&&(moving||jumpQueued))rr.wash=null;
@@ -2681,8 +2835,9 @@ function updatePlayer(dt){
   const under=cellTop(p.x,p.z),inWater=under<-0.75&&p.y<-0.4,wading=!inWater&&under<-0.25&&p.y<-0.2;P.inWater=inWater;
   const spd=(inWater?(run?MOVE.swimFast:MOVE.swim):(run?MOVE.run:MOVE.walk)*(wading?MOVE.wade:1))*vitalSpeed();
   const dx=mx*spd*dt,dz=mz*spd*dt,ox=p.x,oz=p.z;
-  if(dx&&!blocked(p.x+dx,p.z,p.y)&&!bump(p.x,p.z,p.x+dx,p.z))p.x+=dx;
-  if(dz&&!blocked(p.x,p.z+dz,p.y)&&!bump(p.x,p.z,p.x,p.z+dz))p.z+=dz;
+  const inBike=bikeHits(p.x,p.z,0.28);
+  if(dx&&!blocked(p.x+dx,p.z,p.y)&&(inBike||!bikeHits(p.x+dx,p.z,0.28))&&!bump(p.x,p.z,p.x+dx,p.z))p.x+=dx;
+  if(dz&&!blocked(p.x,p.z+dz,p.y)&&(inBike||!bikeHits(p.x,p.z+dz,0.28))&&!bump(p.x,p.z,p.x,p.z+dz))p.z+=dz;
   if(mt.on)clampToHalf(p);
   if(moving)P.heading=Math.atan2(mx,mz);
   if(P.onGround){P.stepAcc=(P.stepAcc||0)+Math.hypot(p.x-ox,p.z-oz);if(P.stepAcc>(run?MOVE.stepRun:MOVE.stepWalk)){P.stepAcc=0;sfx('step',{ground:inWater||wading?'water':getTile(Math.floor(p.x),Math.floor(p.z))});}}
@@ -2710,6 +2865,7 @@ function standUp(){const P=state.player,s=P.seat;if(!s)return;s.occ=null;P.seat=
 function tryInteract(){
   if(state.mode!=='world'||state.modal)return;const P=state.player;if(!P)return;
   if(arc.open)return;
+  if(ride.b!=null){endRide();return;}
   if(gym.use){stopGym();return;}
   if(mt.on)return;
   if(P.seat){standUp();return;}
@@ -2718,6 +2874,7 @@ function tryInteract(){
   const cv=courtHere();if(cv){courtInteract(cv);return;}
   if(P.rodMesh){fishAction();return;}
   if(nearRack()){takeRod();return;}
+  const nb=nearestBike();if(nb!=null&&!P.eating){takeBike(nb);return;}
   if(P.root.position.distanceTo(BOARD_POS)<3.2){openBoard();return;}
   if(P.eating)return;
   const ci=nearestCounterItem();if(ci>=0){holdFood(menu.items[ci]);return;}
@@ -2736,7 +2893,7 @@ addEventListener('keydown',e=>{
   if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(k))e.preventDefault();
   keys.add(k);
   if(gym.use&&!e.repeat&&['w','arrowup','s','arrowdown'].includes(k))gymLevel(k==='w'||k==='arrowup'?1:-1);
-  if(k===' '&&!e.repeat){if(mt.on)matchSwing();else jumpQueued=true;}
+  if(k===' '&&!e.repeat){if(ride.b!=null)sfx('bell');else if(mt.on)matchSwing();else jumpQueued=true;}
   if(k==='e'&&!e.repeat)tryInteract();
   if(k==='m'&&!e.repeat)toggleMute();
   if(k==='f'&&!e.repeat)startEat();
@@ -2750,7 +2907,9 @@ addEventListener('blur',()=>{keys.clear();arcKeys.clear();});
 
 const cvs=renderer.domElement;const raycaster=new THREE.Raycaster();const ndc=new THREE.Vector2();
 let drag=null,lastClick={id:null,t:0};const ptrs=new Map();let pinch=null;// two fingers on the view pinch to zoom
-cvs.addEventListener('pointerdown',e=>{if(state.mode!=='world')return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});try{cvs.setPointerCapture(e.pointerId);}catch(_){}
+cvs.addEventListener('pointerdown',e=>{if(state.mode!=='world')return;
+  if(mouseLook.on&&e.pointerType!=='touch'&&!mouseLocked()){captureMouse();drag=null;return;}// this click only captures the mouse
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});try{cvs.setPointerCapture(e.pointerId);}catch(_){}
   if(ptrs.size>=2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,dist:cam.dist};drag=null;return;}
   drag={id:e.pointerId,x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false};});
 cvs.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -2759,12 +2918,25 @@ cvs.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.point
   if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>6)drag.moved=true;
   if(drag.moved){cam.yaw-=dx*0.0065;cam.pitch=clamp(cam.pitch+dy*0.0045,0.16,1.25);}});
 const ptrEnd=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;};
-cvs.addEventListener('pointerup',e=>{ptrEnd(e);if(!drag||drag.id!==e.pointerId)return;const d=drag;drag=null;if(!d.moved)handlePick(e.clientX,e.clientY);});
+cvs.addEventListener('pointerup',e=>{ptrEnd(e);if(!drag||drag.id!==e.pointerId)return;const d=drag;drag=null;if(d.moved)return;
+  if(mouseLocked()){const r=cvs.getBoundingClientRect();handlePick(r.left+r.width/2,r.top+r.height/2,true);}else handlePick(e.clientX,e.clientY);});// captured: pick at the crosshair
+/* mouse look (an option in the Menu, desktop only): once on, one click on the world captures the mouse (pointer lock) and moving it turns
+   the camera with no button held. A crosshair marks the middle of the screen and a click picks what is under it. Esc gives the cursor
+   back; menus and the arcade release it too. */
+const mouseLook={on:!coarse&&!!Store.get('ga_mouselook',false)};
+const mouseLocked=()=>!!document.pointerLockElement&&document.pointerLockElement===cvs;
+function captureMouse(){if(!mouseLook.on||coarse||state.mode!=='world'||state.modal||arc.open||!cvs.requestPointerLock||mouseLocked())return;try{const r=cvs.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(_){}}
+function releaseMouse(){if(mouseLocked()&&document.exitPointerLock)document.exitPointerLock();}
+function setMouseLook(on){mouseLook.on=!!on&&!coarse;Store.set('ga_mouselook',mouseLook.on);if(!mouseLook.on)releaseMouse();renderMouseLook();}
+function renderMouseLook(){const L=mouseLocked();$('#crosshair').hidden=!L;cvs.style.cursor=mouseLook.on&&!L&&state.mode==='world'?'pointer':'';}
+addEventListener('mousemove',e=>{if(!mouseLocked()||state.mode!=='world')return;cam.yaw-=(e.movementX||0)*0.0065;cam.pitch=clamp(cam.pitch+(e.movementY||0)*0.0045,0.16,1.25);});// same feel as dragging
+if(document.addEventListener)document.addEventListener('pointerlockchange',renderMouseLook);
 cvs.addEventListener('pointercancel',e=>{ptrEnd(e);drag=null;});
 cvs.addEventListener('wheel',e=>{if(state.mode!=='world')return;e.preventDefault();cam.dist=clamp(cam.dist*(e.deltaY>0?1.1:0.9),4,24);},{passive:false});
-function handlePick(cx,cy){
+// skipMe: the crosshair sits on your own head (the camera orbits you), so a captured-mouse click looks past you
+function handlePick(cx,cy,skipMe){
   const r=cvs.getBoundingClientRect();ndc.set(((cx-r.left)/r.width)*2-1,-((cy-r.top)/r.height)*2+1);raycaster.setFromCamera(ndc,camera);
-  const targets=[...PICK_TARGETS];for(const ch of state.chars.values())if(ch.root.visible)targets.push(ch.hit);
+  const targets=[...PICK_TARGETS];for(const ch of state.chars.values())if(ch.root.visible&&!(skipMe&&ch===state.player))targets.push(ch.hit);
   const hits=raycaster.intersectObjects(targets,false);
   if(!hits.length){if(state.selected)closeCard();return;}
   const o=hits[0].object;
@@ -2788,7 +2960,7 @@ function endJoy(e){if(joy.active!==e.pointerId)return;const tap=!joy.moved&&perf
 moveZone.addEventListener('pointerup',endJoy);moveZone.addEventListener('pointercancel',endJoy);
 function moveJoy(e){let dx=e.clientX-joy.cx,dy=e.clientY-joy.cy;const l=Math.hypot(dx,dy);if(l>8)joy.moved=true;joy.run=l>JOY_RUN;joyEl.classList.toggle('run',joy.run);
   if(l>JOY_R){dx*=JOY_R/l;dy*=JOY_R/l;}joy.x=dx/JOY_R;joy.y=dy/JOY_R;knob.style.transform='translate('+dx+'px,'+dy+'px)';}
-$('#tJump').addEventListener('pointerdown',e=>{e.preventDefault();if(mt.on)matchSwing();else jumpQueued=true;});// Swing during a match
+$('#tJump').addEventListener('pointerdown',e=>{e.preventDefault();if(ride.b!=null)sfx('bell');else if(mt.on)matchSwing();else jumpQueued=true;});// Bell on a bike, Swing in a match
 $('#tUse').addEventListener('click',tryInteract);
 ['pointerdown','pointerup','pointercancel','pointerleave'].forEach(t=>$('#tUse').addEventListener(t,()=>{fishing.hold=t==='pointerdown';}));// hold Use to reel
 $('#tEat').addEventListener('click',startEat);
@@ -2797,15 +2969,15 @@ $('#tDrop').addEventListener('click',dropAction);
 function dropAction(){if(mt.on)quitMatch();else if(state.player&&state.player.rodMesh&&fishing.phase!=='reel')stowRod();else putDownFood();}
 // the Use button names what it will do here (same order as tryInteract); Drop shows while you hold food or a rod
 function useVerb(){const P=state.player;if(!P||state.mode!=='world'||state.modal||arc.open||mt.on||rr.use||rr.wash)return '';
-  if(gym.use)return 'Stop';if(P.seat)return 'Stand';
+  if(gym.use)return 'Stop';if(ride.b!=null)return nearestFreeDock(P.root.position.x,P.root.position.z,2.6)>=0?'Return':'Get off';if(P.seat)return 'Stand';
   if(!P.eating){if(nearestArcade())return 'Play';if(nearestGym())return 'Start';}
   if(courtHere())return 'Play';
   if(P.rodMesh)return fishing.phase==='reel'?'Reel':(fishing.phase==='wait'||fishing.phase==='bite')?'Strike':fishing.phase?'':'Cast';
-  if(nearRack())return 'Rod';if(P.root.position.distanceTo(BOARD_POS)<3.2)return 'Read';if(P.eating)return '';
+  if(nearRack())return 'Rod';if(nearestBike()!=null&&!P.eating)return 'Ride';if(P.root.position.distanceTo(BOARD_POS)<3.2)return 'Read';if(P.eating)return '';
   if(nearestCounterItem()>=0||nearCooler())return 'Take';if(nearCoffee())return brew.on?'':'Coffee';if(nearestSink())return 'Wash';
   const st=nearestStall();if(st)return st.occ?'':st.kind==='shower'?'Shower':'Enter';
   return nearestSeat()?'Sit':'';}
-function updateTouchButtons(){const P=state.player,v=useVerb(),u=$('#tUse');$('#tUseV').textContent=v||'Use';u.classList.toggle('idle',!v);u.setAttribute('aria-label',v?v+' (Use)':'Use');
+function updateTouchButtons(){const P=state.player,v=useVerb(),u=$('#tUse');$('#tJump').textContent=ride.b!=null?'Bell':mt.on?'Swing':'Jump';$('#tUseV').textContent=v||'Use';u.classList.toggle('idle',!v);u.setAttribute('aria-label',v?v+' (Use)':'Use');
   const d=$('#tDrop'),rod=!!(P&&P.rodMesh&&fishing.phase!=='reel'&&fishing.phase!=='caught'),food=!!(P&&P.held&&!P.eating);d.hidden=!(rod||food);if(!d.hidden)d.textContent=rod?'Stow':'Drop';}
 
 /* landscape only on phones and tablets: going full screen lets Android lock the orientation; elsewhere the rotate screen asks */
@@ -2873,6 +3045,8 @@ const mmBase=(()=>{const c=document.createElement('canvas');c.width=c.height=MM;
 const toMM=(x,z)=>[(x+HALF)*MS,(z+HALF)*MS];
 function drawMinimap(){
   mmg.clearRect(0,0,MM,MM);mmg.drawImage(mmBase,0,0);
+  for(const S of BIKE_STANDS){const [x,y]=toMM(S.x,S.z);mmg.fillStyle='#4fd3ff';mmg.fillRect(x-2.5,y-2.5,5,5);mmg.strokeStyle='#110b07';mmg.lineWidth=1;mmg.strokeRect(x-3,y-3,6,6);}
+  for(const B of BIKES)if(!B.r&&B.d<0){const [x,y]=toMM(B.x,B.z);mmg.fillStyle='#4fd3ff';mmg.fillRect(x-1,y-1,2,2);}
   const D=state.me&&DESK_SLOTS[state.me.deskSlot];if(D){const [x,y]=toMM(D.x,D.dz+D.tw*0.5);mmg.strokeStyle='#f2b632';mmg.lineWidth=2;mmg.strokeRect(x-4,y-4,8,8);}
   for(const ch of state.chars.values()){if(ch===state.player||!ch.root.visible)continue;const [x,y]=toMM(ch.root.position.x,ch.root.position.z);
     mmg.fillStyle=ch.golden?'#f2b632':ch.kind==='local'?'#948470':'#f6ecd6';const s=ch.golden?4:3;mmg.fillRect(x-s/2,y-s/2,s,s);mmg.strokeStyle='#110b07';mmg.lineWidth=1;mmg.strokeRect(x-s/2-0.5,y-s/2-0.5,s+1,s+1);}
@@ -3062,7 +3236,7 @@ $('#cardClose').addEventListener('click',closeCard);
 
 /* ---------- modals ---------- */
 const modal=$('#modal'),modalBody=$('#modalBody');
-function showModal(name,html){if(!state.modal)sfx('open');state.modal=name;keys.clear();modalBody.innerHTML=html;modal.hidden=false;setTimeout(()=>{const f=$('#modalClose');if(f)f.focus();},10);}
+function showModal(name,html){releaseMouse();if(!state.modal)sfx('open');state.modal=name;keys.clear();modalBody.innerHTML=html;modal.hidden=false;setTimeout(()=>{const f=$('#modalClose');if(f)f.focus();},10);}
 function closeModal(){if(state.modal)sfx('close');state.modal=null;modal.hidden=true;cvs.focus({preventScroll:true});}
 $('#modalClose').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
@@ -3099,6 +3273,8 @@ function openMenu(confirmDelete){
       +'<label class="check"><input type="checkbox" id="mMute"'+(SND.muted?' checked':'')+'> Mute everything <span class="key">M</span></label>'
       +'<p class="fine">The music and background sounds change with where you are. Everything is generated in your browser, so there are no files to download.</p>'
       :'<p class="fine">This browser can’t play sound.</p>')+'</div>'
+    +(coarse?'':'<div style="display:grid;gap:8px"><span class="lbl">Mouse</span><label class="check"><input type="checkbox" id="mLook"'+(mouseLook.on?' checked':'')+'> Mouse look: move the mouse to look around, no button held</label>'
+      +'<p class="fine">Click the world to start. A crosshair marks the middle of the screen, and a click (or double-click to poke) picks whoever is under it. Press <span class="key">Esc</span> to get your cursor back for the buttons.</p></div>')
     +(room.mode?'<div style="display:grid;gap:6px"><span class="lbl">Room</span><div style="font-size:15px">'+esc(room.name)+' <span class="code-chip">'+esc(room.code)+'</span></div><p class="fine">'+(room.mode==='host'?'You host this room, so everyone’s profiles and apples are saved in this browser. Keep this tab open while people play.':'Your profile and apples are saved by the host of this room.')+'</p><div class="menu-actions"><button class="btn" id="mRoom" type="button">Invite &amp; room details</button></div></div>':'')
     +(room.mode?'':'<div style="display:grid;gap:6px"><span class="lbl">Where your profile is saved</span>'
     +'<div class="storage-row"><span>Cookie</span><span class="'+(state.cookieOK?'ok':'bad')+'">'+(state.cookieOK?'Saved':'Blocked by browser')+'</span></div>'
@@ -3113,6 +3289,7 @@ function openMenu(confirmDelete){
   if(mMus)mMus.addEventListener('input',()=>{SND.music=mMus.value/100;saveSound();});
   if(mFx){mFx.addEventListener('input',()=>{SND.sfx=mFx.value/100;saveSound();});mFx.addEventListener('change',()=>sfx('catch'));}
   if(mMu)mMu.addEventListener('change',()=>{SND.muted=mMu.checked;audioInit();saveSound();});
+  const mLk=$('#mLook',modalBody);if(mLk)mLk.addEventListener('change',()=>{setMouseLook(mLk.checked);if(mLk.checked)toast('Mouse look is on: close the menu and click the world to look around with the mouse. <span class="key">Esc</span> gives the cursor back.','',4200);});
   on('mDelYes',()=>{const k=kOf(me),email=me.email;if(room.mode==='guest')roomSend({t:'delete'});deleteUser(k);
     if(!room.mode){Cookies.del(profileCookieName(email));Cookies.del('ga_session');Store.del('ga_last');}
     else{rememberRoom(room.mode==='host'?'ga_hosted':'ga_joined',{code:room.code,name:room.name,email:''});room.email='';}
@@ -3134,7 +3311,7 @@ if(coarse){$('#hint').innerHTML='<span>Left thumb: walk · push past the ring to
    Guests connect straight to the host with WebRTC; PeerJS only does the joining handshake. No STUN or TURN
    servers are configured, so only devices on the same network can connect.
    ========================================================= */
-const PROTO=1,ROOM_PREFIX='golden-apple-room-',CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',PEER_OPTS={debug:0,config:{iceServers:[]}};
+const PROTO=2,ROOM_PREFIX='golden-apple-room-',CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',PEER_OPTS={debug:0,config:{iceServers:[]}};
 const newRoomCode=()=>Array.from({length:6},()=>CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
 const normCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const validCode=c=>c.length===6&&[...c].every(ch=>CODE_CHARS.includes(ch));
@@ -3148,7 +3325,7 @@ const str=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
 function saveRoomData(){if(room.mode==='host'&&room.data)Store.set('ga_room_'+room.code,room.data);}
 function rememberRoom(list,entry){const old=Store.get(list,[]).find(x=>x.code===entry.code)||{};const a=Store.get(list,[]).filter(x=>x.code!==entry.code);a.unshift(Object.assign(old,entry));Store.set(list,a.slice(0,6));}
 const roomEmail=(list,code)=>(Store.get(list,[]).find(x=>x.code===code)||{}).email||'';
-function useSoloData(){USERS=Store.get('ga_users',{});WORLD=Store.get('ga_world',null)||{v:2,feed:[]};}
+function useSoloData(){USERS=Store.get('ga_users',{});WORLD=Store.get('ga_world',null)||{v:2,feed:[]};BIKES=bikesClean(WORLD.bikes,false);WORLD.bikes=BIKES;applyBikes();}
 function roomSend(m){const c=room.hostConn;if(c&&c.open){try{c.send(m);return true;}catch(e){}}return false;}
 function broadcast(m,except){for(const c of room.conns)if(c!==except&&c.conn.open){try{c.conn.send(m);}catch(e){}}}
 function sendTo(k,m){for(const c of room.conns)if(c.key===k&&c.conn.open){try{c.conn.send(m);}catch(e){}}}
@@ -3170,7 +3347,7 @@ function hostRoom(code,name,fresh){
   if(!window.Peer){roomError('Rooms need the internet to start. Check your connection and reload the page.');return;}
   leaveRoom();state.solo=false;
   room.mode='host';room.code=code;room.data=Store.get('ga_room_'+code,null)||{v:1,code,name,createdAt:Date.now(),users:{},feed:[]};
-  room.name=room.data.name;USERS=room.data.users;WORLD={v:2,feed:room.data.feed||[]};
+  room.name=room.data.name;USERS=room.data.users;WORLD={v:2,feed:room.data.feed||[]};BIKES=bikesClean(room.data.bikes,false);room.data.bikes=BIKES;applyBikes();
   setRoomStatus('connecting');
   const p=new window.Peer(roomPeerId(code),PEER_OPTS);room.peer=p;
   p.on('open',()=>{if(room.peer!==p)return;saveRoomData();rememberRoom('ga_hosted',{code,name:room.name});setRoomStatus('live');});
@@ -3190,7 +3367,7 @@ function hostAccept(conn){
 }
 function setOnline(k,on){
   const was=room.online.has(k);if(on)room.online.add(k);else room.online.delete(k);if(was===on)return;
-  if(room.mode==='host')broadcast({t:'presence',k,on});
+  if(room.mode==='host'){broadcast({t:'presence',k,on});if(!on&&k!==myKey())bikeRiderLeft(k);}
   onPresence(k,on);
 }
 function onPresence(k,on){
@@ -3206,7 +3383,7 @@ function hostOnMsg(c,m){
   if(!m||typeof m!=='object')return;
   switch(m.t){
     case 'hello':if(m.v!==PROTO){c.conn.send({t:'bye',why:'version'});return;}
-      c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[...room.online]});return;
+      c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[...room.online],bikes:BIKES});return;
     case 'login':{const email=str(m.email,120).toLowerCase();if(!EMAIL_RE.test(email))return;const k=findKeyByEmail(email);
       if(k)hostBind(c,k);else c.conn.send({t:'login',ok:false,email});return;}
     case 'create':{const email=str(m.email,120).toLowerCase(),p=cleanProfile(m.profile||{});
@@ -3228,6 +3405,7 @@ function hostOnMsg(c,m){
     case 'poke':{const td=USERS[m.to];if(!td||!POKES.includes(m.msg)||td===me)return;const f=charOfKey(k),t=charOfKey(m.to);
       if(state.mode==='world'&&f&&t)doPoke(f,t,m.msg,c);else pokeData(me,td,m.msg,c);return;}
     case 'read':(me.inbox||[]).forEach(i=>i.read=true);saveUsers();return;
+    case 'bike':{const a=m.a&&typeof m.a==='object'?m.a:{};if(bikeRule(k,str(m.op,6),m.b|0,{d:a.d,x:a.x,z:a.z,h:a.h}))bikesChanged();else c.conn.send({t:'bikes',b:BIKES});return;}// a refusal resends the list
     case 'delete':c.key=null;deleteUser(k);setOnline(k,false);return;
   }
 }
@@ -3236,7 +3414,7 @@ function joinRoom(code,email){
   $('#roomErr').textContent='';
   if(!window.Peer){roomError('Rooms need the internet to connect. Check your connection and reload the page.');return;}
   leaveRoom();state.solo=false;
-  room.mode='guest';room.code=code;room.email=email||'';USERS={};WORLD={v:2,feed:[]};
+  room.mode='guest';room.code=code;room.email=email||'';USERS={};WORLD={v:2,feed:[]};BIKES=bikesDefault();applyBikes();
   setRoomStatus('connecting');
   const p=new window.Peer(PEER_OPTS);room.peer=p;
   p.on('open',()=>{if(room.peer===p)connectHost();});
@@ -3266,7 +3444,7 @@ function guestOnMsg(m){
   switch(m.t){
     case 'welcome':{
       room.name=str(m.room&&m.room.name,28)||'Room';const mine=state.me;USERS=m.users||{};if(mine)USERS[kOf(mine)]=Object.assign(mine,USERS[kOf(mine)]||{});
-      WORLD={v:2,feed:Array.isArray(m.feed)?m.feed:[]};room.online=new Set(m.online||[]);room.everJoined=true;
+      WORLD={v:2,feed:Array.isArray(m.feed)?m.feed:[]};room.online=new Set(m.online||[]);room.everJoined=true;BIKES=bikesClean(m.bikes,true);applyBikes();
       rememberRoom('ga_joined',{code:room.code,name:room.name});setRoomStatus('live');
       if(state.mode==='world'&&mine){guestLogin(mine.email);syncDesks();syncPeople();renderFeed();drawBoard();}
       else if(room.email)guestLogin(room.email);
@@ -3287,6 +3465,7 @@ function guestOnMsg(m){
     case 'gone':{const k=m.k;if(k===myKey()){deleteUser(k);leaveWorld();toast('Your profile was removed from this room.','',3200);}else deleteUser(k);return;}
     case 'presence':{if(m.on)room.online.add(m.k);else room.online.delete(m.k);onPresence(m.k,!!m.on);return;}
     case 'st':applyNetState(m.k,m.s);return;
+    case 'bikes':BIKES=bikesClean(m.b,true);applyBikes();return;
     case 'gift':{(m.recs||[]).forEach(mergeRec);if(Array.isArray(m.feed))WORLD.feed=m.feed;const fd=USERS[m.from],td=USERS[m.to];if(fd&&td)afterGift(fd,td,m.count|0,str(m.reason,40),str(m.note,120),!!m.became);return;}
     case 'poke':{const f=charOfKey(m.from),t=charOfKey(m.to);if(state.mode==='world'&&f&&t&&POKES.includes(m.msg))doPoke(f,t,m.msg,true);return;}
     case 'dm':if(typeof m.from==='string')onDm(m.from,m.d);return;
@@ -3405,10 +3584,10 @@ function openRoomModal(){
   on('rLeave','click',()=>{closeModal();if(state.mode==='world')leaveWorld();leaveRoom();showLogin();toast('You left the room.','',2200);});
 }
 function restoreRoom(d){
-  room.data={v:1,code:room.code,name:str(d.name,28)||room.name,createdAt:d.createdAt||Date.now(),users:d.users,feed:Array.isArray(d.feed)?d.feed:[]};
+  room.data={v:1,code:room.code,name:str(d.name,28)||room.name,createdAt:d.createdAt||Date.now(),users:d.users,feed:Array.isArray(d.feed)?d.feed:[],bikes:bikesClean(d.bikes,false)};BIKES=room.data.bikes;applyBikes();
   room.name=room.data.name;const email=state.me&&state.me.email;if(state.mode==='world')leaveWorld();
   USERS=room.data.users;WORLD={v:2,feed:room.data.feed};saveRoomData();
-  for(const c of room.conns){c.key=null;c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[]});}
+  for(const c of room.conns){c.key=null;c.conn.send({t:'welcome',v:PROTO,room:{code:room.code,name:room.name},users:pubUsers(),feed:WORLD.feed,online:[],bikes:BIKES});}
   room.online=new Set();closeModal();const rec=email&&findUser(email);if(rec)enterWorld(rec);else showLogin();toast('Room restored from the backup.','',3000);
 }
 
@@ -3620,7 +3799,7 @@ function enterWorld(rec){
 }
 function resumeWorld(){state.mode='world';applyViewOffset();$('#screen-login').hidden=true;$('#screen-setup').hidden=true;$('#hud').hidden=false;$('#hint').hidden=state.hintHidden;cvs.focus({preventScroll:true});}
 function leaveWorld(){
-  const k=myKey();if(room.mode==='host'&&k)setOnline(k,false);else if(room.mode==='guest')roomSend({t:'logout'});
+  releaseMouse();leaveBike();const k=myKey();if(room.mode==='host'&&k)setOnline(k,false);else if(room.mode==='guest')roomSend({t:'logout'});
   exitArcade();arc.joining=null;stopGym();quitMatch();saveVitals();endRestroom();rr.wash=null;endFishing();
   closeCard();if(state.player){if(state.player.seat)state.player.seat.occ=null;state.player.dispose();state.chars.delete('me');state.player=null;}
   for(const l of locals.splice(0)){freeStallOf(l);l.dispose();state.chars.delete(l.id);if(l.spot)l.spot.occ=null;}
@@ -3639,7 +3818,7 @@ function frame(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frameN++;
   if(state.mode==='world')updatePlayer(dt);
   for(const ch of state.chars.values())ch.update(dt);
-  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);updateRoom(dt);updateVitals(dt);updateRestroom(dt);updateDoors(dt);updateDayNight(dt);updateFishing(dt);updateLakeFish(dt);updateArcade(dt);updateGym(dt);updateMatch(dt);
+  updateParticles(dt);updateFlyers(dt);updateRings(dt);updateSound(dt);updateFood(dt);updateRoom(dt);updateVitals(dt);updateRestroom(dt);updateDoors(dt);updateBikes(dt);updateDayNight(dt);updateFishing(dt);updateLakeFish(dt);updateArcade(dt);updateGym(dt);updateMatch(dt);
   for(const S of DESK_SLOTS)if(S.desk)animateDesk(S.desk,now/1000,dt);
   waterTex.offset.x+=dt*0.015;waterTex.offset.y+=dt*0.008;
   for(const c of clouds){c.position.x+=c.userData.v*dt;if(c.position.x>100)c.position.x=-100;}
@@ -3658,14 +3837,16 @@ function frame(now){
       const kh=coarse?'Tap <span class="key">Use</span>':'Press <span class="key">E</span>';
       const fk=coarse?'Tap <span class="key">Eat</span>':'Press <span class="key">F</span>';
       if(P&&!state.modal){let s,o,ci;const hf=P.held&&FOOD[P.held],eatMsg=hf?fk+' to '+(isDrink(hf)?'drink':'eat')+' '+esc(hf.name):'';
-        let sk,st,ac,gm,cv;
+        let sk,st,ac,gm,cv,bk;
         if(rr.use)msg=rr.use.S.kind==='shower'?'Showering…':'In the restroom…';
         else if(rr.wash)msg='Washing your hands…';
         else if(gym.use)msg=gymPrompt(kh);
+        else if(ride.b!=null)msg=bikePrompt(kh);
         else if(mt.on)msg=matchPrompt();
         else if(P.rodMesh||fishing.phase)msg=fishPrompt(kh);
         else if(P.eating)msg=isDrink(P.eating.f)?'Drinking…':'Eating…';
         else if(P.seat)msg=(P.seat.desk?'Working · ':'Resting · ')+kh+' or move to stand up'+(hf?' · '+eatMsg:'');
+        else if((bk=nearestBike())!=null&&!P.eating&&!P.rodMesh)msg=bikeNearPrompt(bk,kh);
         else if(P.root.position.distanceTo(BOARD_POS)<3.2)msg=kh+' to read the Orchard Board';
         else if((ac=nearestArcade()))msg=arcPrompt(ac,kh);
         else if((ci=nearestCounterItem())>=0){const f=FOOD[menu.items[ci]];msg=kh+' to take '+esc(f.name)+' <span class="cat '+f.cat+'">'+FOOD_CATS[f.cat]+'</span>';}
@@ -3679,7 +3860,7 @@ function frame(now){
         else if((s=nearestSeat()))msg=kh+(s.desk?' to sit at your desk':' to sit')+(hf?' and '+(isDrink(hf)?'drink':'eat'):'');
         else if((o=nearestOtherDesk()))msg=esc(deskOwnerName(o))+'’s desk · only they can sit here';
         else if(hf)msg=eatMsg+(coarse?'':' · <span class="key">Q</span> put it down');}
-      $('#tEat').hidden=!(P&&P.held&&!P.eating);if(coarse)updateTouchButtons();
+      $('#tEat').hidden=!(P&&P.held&&!P.eating);if(coarse)updateTouchButtons();else renderMouseLook();
       pr.hidden=!msg;if(msg&&pr.innerHTML!==msg)pr.innerHTML=msg;
     }
   }
@@ -3689,7 +3870,7 @@ function frame(now){
 setInterval(()=>{if(state.mode==='world'){renderFeed();renderMe();}},20000);
 
 /* boot */
-resize();drawBoard();showLogin();renderRoomBtn();
+initBikes();resize();drawBoard();showLogin();renderRoomBtn();
 // an invite link (?room=CODE) joins straight away; the host's own link reopens the room
 (function(){if(typeof URLSearchParams==='undefined'||!location.search)return;const code=normCode(new URLSearchParams(location.search).get('room'));if(!validCode(code))return;
   roomCodeIn.value=code;const own=Store.get('ga_hosted',[]).find(r=>r.code===code);if(own)hostRoom(code,own.name,false);else joinRoom(code,roomEmail('ga_joined',code));})();
