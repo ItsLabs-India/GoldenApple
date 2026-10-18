@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const clock = { now: 1000 };
 // internals exposed to tests, injected right before the app's closing `})();`
 const EXPORTS = 'SLOT_STRIPS,SLOT_PAY,SLOT_WILD,slotLines,slotWallet,arcBanner:()=>arcBanner,COURTS,COURT_FX,mt,matchSwing,quitMatch,startMatch,makeShot,newBall,stepBall,inCourt,halfAt,isOver,GYM,GYM_KINDS,GYM_COOLER,gym,gymLevel,gymLabel,nearestGym,gymWho,nearCooler,gymStats,startGym,stopGym,ARCADES,GAMES,arc,arcKeys,toIn,nearestArcade,arcadeOccupants,exitArcade,useArcade,arcStart,state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
-  + 'joy,useVerb,dropAction,AV,randomAvatar,randomDesk,arrToAvatar,avatarToArr,setTab,pv,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
+  + 'closeModal,FURN,PROPS,DOORS,MOVE,GRAV,PX,cam,bump,solidBox,joy,useVerb,dropAction,AV,randomAvatar,randomDesk,arrToAvatar,avatarToArr,setTab,pv,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
   + 'FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup,'
   + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld,'
   + 'V,STALLS,rr,nearestStall,nearestSink,nutrition,vitalSpeed,canRun,saveVitals,loadVitals,ACT,'

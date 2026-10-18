@@ -553,6 +553,59 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   await new Promise(r => setTimeout(r, 2500)); frames(60, 16);
   ok(G.USERS()['old@example.com'].inbox.some(i => i.type === 'poke' && i.msg === 'Coffee break?'), 'poke to an Away user lands in their inbox');
 
+  console.log('Physics and real-world sizes');
+  const P0 = G.state.player, pos = P0.root.position; G.cam.yaw = 0; G.closeCard(); if (G.state.modal) G.closeModal();
+  pos.set(0, 0, 9.5); fresh(); frames(3, 16); keysDown('w'); frames(40, 50); keysUp('w'); const walked = 9.5 - pos.z;
+  pos.set(0, 0, 9.5); fresh(); frames(3, 16); keysDown('shift'); keysDown('w'); frames(20, 50); keysUp('w'); keysUp('shift'); const ran = 9.5 - pos.z;
+  ok(near(walked / 2, G.MOVE.walk, 0.12) && near(ran, G.MOVE.run, 0.4), 'people walk at a real 1.6 m/s and run at 5.6 m/s (' + (walked / 2).toFixed(2) + ' and ' + ran.toFixed(2) + ' m/s)');
+  pos.set(0, 0, 9.5); frames(5, 16); let top = 0, air = 0; keysDown(' '); keysUp(' ');
+  for (let i = 0; i < 90; i++) { frames(1, 10); top = Math.max(top, pos.y); if (pos.y > 0) air += 0.01; }
+  ok(near(top, 1.11, 0.06) && near(air, 0.64, 0.08), 'Space jumps about 1.1 m high for about 0.64 s, as before (' + top.toFixed(2) + ' m, ' + air.toFixed(2) + ' s)');
+  const ox = oldCh.root.position.x, oz = oldCh.root.position.z; oldCh.root.position.x = 0; oldCh.root.position.z = 7;
+  pos.set(0, 0, 9.5); fresh(); frames(3, 16); keysDown('w'); frames(60, 50); keysUp('w'); const stopAt = pos.z;
+  keysDown('s'); frames(5, 50); keysUp('s'); const backAt = pos.z; oldCh.root.position.x = ox; oldCh.root.position.z = oz;
+  ok(stopAt > 7.45 && stopAt < 7.6 && backAt > stopAt + 0.2, 'you can’t walk through a coworker: you stop when your shoulders meet, and can always step back (' + stopAt.toFixed(2) + ')');
+  const lamp = G.LAMPS.find(l => l.kind === 'street' && l.x === 2.6 && l.z === -8);
+  ok(G.cellTop(lamp.x, lamp.z) >= 3 && G.cellTop(lamp.x + 0.45, lamp.z) === 0 && G.cellTop(lamp.x, lamp.z + 0.45) === 0, 'collision follows each prop’s real shape (0.25 m grid): a lamp post blocks its own 0.4 m, not the whole metre round it');
+  let benchArea = 0; for (let x = 2.5; x < 5; x += 0.25) for (let z = -5; z < -2.5; z += 0.25) if (G.cellTop(x + 0.125, z + 0.125) > 0.55) benchArea += 0.0625;
+  ok(benchArea > 0.9 && benchArea < 1.8, 'a diagonal plaza bench blocks about its own 1.2 m² (' + benchArea.toFixed(2) + ' m²), not four whole tiles');
+  let ghosts = [];
+  for (const mat of ['noise', 'glow', 'glass']) for (const b of G.FURN[mat]) {
+    const [x, y, z, sx, sy, sz, , rot] = b; if (y + sy / 2 < 0.6 || y - sy / 2 > 1.75 || (Math.max(sx, sz) < 0.3 && Math.min(sx, sz) < 0.1)) continue;// below the knee, above the head, or a thin stem
+    const c0 = Math.cos(rot), s0 = Math.sin(rot), at = (u, v) => G.cellTop(x + u * c0 + v * s0, z - u * s0 + v * c0);
+    if (Math.min(sx, sz) <= 0.05 && (sx < sz ? at(-0.15, 0) > 0.55 || at(0.15, 0) > 0.55 : at(0, -0.15) > 0.55 || at(0, 0.15) > 0.55)) continue;// flat on a wall
+    let n = 0, k = 0; for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) { n++; if (at((i / 6 - 0.5) * sx * 0.96, (j / 6 - 0.5) * sz * 0.96) > 0.55) k++; }
+    if (k / n < 0.6) ghosts.push(x.toFixed(1) + ',' + z.toFixed(1));
+  }
+  ok(ghosts.length === 0, 'nothing between knee and head height can be walked through: every prop is solid where it stands' + (ghosts.length ? ' — not solid: ' + ghosts.slice(0, 6).join(' ') : ''));
+  ok(G.cellTop(5.2, 31.2) === -1 && G.cellTop(-16.6, 31.2) === -0.5, 'the lake is 1 m deep with a shallow shelf at the edge, like a real shore');
+  pos.set(-12, -1, 31); fresh(); frames(3, 16); keysDown('a'); frames(200, 50); keysUp('a');
+  ok(pos.x < -17.2 && Math.abs(pos.y) < 1e-6, 'you swim to the shore and wade out without having to jump (' + pos.x.toFixed(1) + ')');
+  let dryEdge = 0; for (let cx = -24; cx < 24; cx++) for (let cz = 18; cz < 44; cz++) { if (G.getTile(cx, cz) !== 'water') continue; let shore = false;
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const t = G.getTile(cx + dx, cz + dz); if (t !== 'water' && t !== 'dock') shore = true; }
+    if (shore && G.cellTop(cx + 0.5, cz + 0.5) !== -0.5) dryEdge++; }
+  ok(dryEdge === 0, 'the shallow shelf runs all the way round: every bit of water touching the shore is wadeable');
+  pos.set(2.5, -1, 24.5); fresh(); frames(3, 16); keysDown('w'); frames(150, 50); keysUp('w');
+  ok(pos.z < 22.5 && Math.abs(pos.y) < 1e-6, 'from deep water by the dock you wade out on the north shore too (' + pos.z.toFixed(1) + ')');
+  pos.set(1.6, -1, 26); fresh(); frames(3, 16); keysDown('a'); keyTap(' '); frames(30, 16); keyTap(' '); frames(30, 16); keysUp('a');
+  ok(pos.x < 1 && Math.abs(pos.y) < 1e-6, 'and you can jump out of deep water up onto the dock, as before (' + pos.x.toFixed(2) + ', ' + pos.y.toFixed(2) + ')');
+  const dd = G.DOORS.find(d => d.key === 'desks'); pos.set(0, 0, -14.6); frames(20, 50); const opened = dd.open;
+  pos.set(0, 0, -8); frames(40, 50);
+  ok(G.DOORS.length === 5 && opened > 0.9 && dd.open < 0.05, 'automatic sliding doors open as someone walks up and close behind them');
+  const pst = G.SPOTS.filter(s => s.zone === 'pantry' && s.pose === 'sit');
+  ok(pst.length === 8 && pst.every(s => { const e = Math.max(Math.abs(s.x - 24), Math.abs(s.z - (s.z < 0.5 ? -3 : 4))) - 0.6; return e > 0.2 && e < 0.45; }), 'pantry stools sit 0.35 m from a 1.2 m cafe table, close enough to eat at it');
+  const REAL = { // real-world sizes in metres, [min, max]: the long and short side of the footprint and the height
+    bench: { long: [1.5, 2.0], h: [0.75, 1.0] }, pantryTable: { long: [0.8, 1.2], h: [0.72, 0.78] }, stool: { h: [0.43, 0.52] }, sofa: { long: [1.8, 2.4], short: [0.75, 1.0], h: [0.8, 1.0] },
+    coffeeTable: { h: [0.38, 0.48] }, fridge: { h: [1.75, 2.1] }, vending: { h: [1.75, 1.95], long: [0.8, 1.0] }, slotMachine: { h: [1.6, 2.2] }, tennisNet: { h: [0.9, 1.07] },
+    streetLamp: { h: [3, 5] }, bollard: { h: [0.8, 1.1] }, sign: { h: [1.8, 2.4] }, infoBoard: { h: [1.8, 2.2] }, fingerpost: { h: [2.4, 3.2] }, recycleBin: { h: [0.85, 1.1], long: [0.4, 0.65] },
+    refill: { h: [1.0, 1.25] }, car: { long: [4.0, 4.8], short: [1.7, 1.9], h: [1.35, 1.6] }, bike: { long: [1.6, 1.9], h: [0.95, 1.15] }, evCharger: { h: [1.1, 1.6] },
+    shuttle: { long: [3.2, 4.6], h: [1.8, 2.2] }, sheep: { long: [1.2, 1.6], h: [0.75, 1.1] }, beehive: { h: [0.8, 1.2] }, raisedBed: { h: [0.3, 0.8] }, rainBarrel: { h: [0.8, 1.1] },
+    shed: { h: [2.0, 2.6] }, greenhouse: { h: [2.2, 3.2] }, appleTree: { h: [2.2, 4.0] }, windTurbine: { h: [9, 30] } };
+  const offSize = []; for (const [name, want] of Object.entries(REAL)) { const got = G.PROPS[name]; if (!got) { offSize.push(name + ' missing'); continue; } for (const [k, [lo, hi]] of Object.entries(want)) if (got[k] < lo || got[k] > hi) offSize.push(name + '.' + k + '=' + got[k]); }
+  ok(offSize.length === 0, Object.keys(REAL).length + ' props match real-world sizes (furniture, lamps, signs, bins, cars, bikes, animals, trees…)' + (offSize.length ? ' — off: ' + offSize.join(', ') : ''));
+  ok(near(G.PX * 32, 1.8, 0.05), 'people are 1.8 m tall: the scale everything is built to');
+  pos.set(0, 0, 9.5); frames(5, 16);
+
   console.log('Duplicate email & returning user');
   G.logout();
   ok(G.state.mode === 'login' && !cookieJar.ga_session, 'logout clears session cookie');

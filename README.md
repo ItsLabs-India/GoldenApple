@@ -34,6 +34,18 @@ How it works on your body: your heart rate climbs to the level's target over abo
 
 **Day and night.** A real-time cycle: 30 minutes of day, then 30 minutes of night, with a few minutes of dusk and dawn in between. It follows the real clock, so everyone in a room shares the same time of day, and no clock is shown: the sky changes colour, a square sun and moon cross from east to west, stars come out, clouds dim, and crickets (and frogs at the lake) replace the birds at night. As dusk falls, 80 lamps switch on one by one (street lamps flicker as they warm up) and off again at dawn: floor lamps in the workspace and pantry, cool wall lights in the restroom, lights at every doorway, street lamps around the plaza, along every path and the lakeside, lanterns at the end of the dock and solar bollards along the Green Loop. Each lamp has a bulb, a glow and a pool of light on the ground, and a few real lights brighten the rooms, the plaza and the lake. Lamp posts are solid, and none of them block a walkway or seat.
 
+**Real-world physics and sizes.** Everything is built to a 1.8 m person, with props measured against real ones. Benches have 0.45 m seats, and the cafe tables in the Pantry are 1.2 m square and 0.75 m high, with the stools close enough to reach. Cars are 4.4 m long, bikes 1.75 m, street lamps 3.5 m, signs 2 m and the tennis fence 3 m. The smoke test checks 28 props against real-world size ranges.
+
+Movement follows real numbers too:
+- You walk at a brisk 1.6 m/s and run at 5.6 m/s, and the legs keep a real stride and step rate.
+- You swim at about 1 m/s and slow down while wading.
+- Jumping works as it always did: about 1.1 m high for 0.64 s, enough to hop out of the water onto the shore or the dock.
+- You can step up 0.55 m (a stair or a stand tier).
+
+Collision sits on a 0.25 m grid, so each prop blocks its real shape. A lamp post blocks 0.4 m, not a whole metre, a diagonal bench blocks a diagonal, and nothing between knee and head height can be walked through. People can't walk through each other either: you stop when your shoulders meet, and you can always step back.
+
+The lake has a 0.5 m shallow shelf all the way round its shore, so you can always wade out (or jump out), and every room has automatic sliding doors that open as someone walks up. Building walls stay a cut-away 2 m (real ones are 2.7–3 m) so you can see inside, and the tennis court is shorter than a real one to fit the playground.
+
 **Green campus.** The grounds around the buildings are laid out like an eco-friendly tech campus. A **Green Loop** trail (about 300 m, with solar bollards) runs round the whole site and round the lake, with spurs from the Gym and Playroom paths and the **Meadow Walk** west of the spawn point. Around it: the **Solar Grove** (tilted arrays over a wildflower meadow, with two sheep), the **Wind Row** (three small turbines that turn, and battery stores), the **Mobility Hub** (a solar carport over bike racks, EV bays with chargers and an electric shuttle), the **Kitchen Garden** (greenhouse, raised beds, compost, tool shed, rain barrels), the **Wildflower Meadow** (beehives, a bee hotel, bird boxes) and the **Heritage Orchard** (28 apple trees either side of a trail, with benches). The buildings have green roof edges and living walls, and two floating wetlands sit on the lake. A **Golden Apple Campus** arch and a **campus map** greet you at the spawn point, fingerposts point the way at the junctions, and an info board beside each place lists what you can do there, using the game's real rules. Recycling stations and water refill points line the main paths. The minimap and the place name under your profile know all the new areas. It is scenery only: rooms, seats, routes and rules are unchanged.
 
 **Health, energy and the restroom.** Three bars under your profile change with whatever you are doing, shown on the line under them ("Working at your desk · digesting"). Per minute: standing costs 1.2 health and 0.8 energy, walking 1.6 and 1.5, running 3 and 6, swimming 3.5 and 7, working at your desk 2.2 and 2.2; resting on any other seat recovers about 3–6 energy (more when you are tired, most on a lakeside bench). Nothing lands instantly: a meal goes into your stomach and digests into health over a few minutes (+34 health, +10 energy), fruit gives less, and after two meals you are too full for a third. Drinks reach your bladder over the next few minutes. Coffee's caffeine kicks in over about 3 minutes (+42 energy), each extra cup does less, it wears off with a small dip, and too much makes you jittery. The body is linked: hunger tires you up to 2× faster, and exhaustion wears on your health. Each bar shows what is still on its way as a lighter segment, plus a ▲/▼ trend. Low values have effects: tired people yawn and walk slower, exhausted or starving people can't run, hungry stomachs growl, and you can't focus at your desk when you are worn out or need the restroom (no accidents). Jumping costs a little energy. Needs are saved in this browser: a short break changes nothing, a longer one settles them towards normal (you ate and rested off-screen), and after 3 hours you come back fresh.
@@ -67,7 +79,7 @@ npm test         # runs: node tests/smoke-test.js && node tests/room-test.js
 
 Both tests run the real `js/app.js` in fake browsers (`tests/harness.js`: a tiny DOM, cookies, localStorage, a three.js stub, a strict Web Audio stub and an in-memory PeerJS stand-in), Node 18+.
 
-The smoke test (296 checks) covers a single browser:
+The smoke test (308 checks) covers a single browser:
 - email login, duplicate emails and logout / log back in
 - the daily apple budget and the Golden Apple threshold
 - cookies, including rebuilding a profile from its cookie alone
@@ -143,7 +155,7 @@ There is no server. On **this browser only**, everything stays in that browser. 
 - **Rooms of about 10–20 people.** The host relays every update.
 - **No password,** so anyone with the invite code can sign in with any email in that room, and anyone on the same browser can use any saved email. Fine for a team you trust, not for production.
 - **24 desks.** The Work Desks room has 24 desk spots. When all are taken, new profiles have no desk until someone deletes theirs.
-- Characters pass through each other.
+- Walls are a cut-away 2 m high so you can see into rooms from the camera (real walls are 2.7–3 m), and the tennis court is about three-quarters of real length to fit the playground.
 
 ## Next steps
 
