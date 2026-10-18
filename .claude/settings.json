@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/tools/mindtree.py\" \"$CLAUDE_PROJECT_DIR\" --quiet",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.claude/tools/mindtree.py\" \"$CLAUDE_PROJECT_DIR\" --quiet",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

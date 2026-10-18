@@ -40,10 +40,12 @@ mindmap
       SPOTS seats and poses
       DESK_SLOTS 24, one personal desk each
       Ring path routing, test only
+      Eco campus: Green Loop trail, solar, wind, mobility hub, garden, meadow, orchard
+      info boards, fingerposts, campus map, decoration only
     Day and night
       30 min day, 30 min night, from the clock
       sky, sun, moon, stars; no clock shown
-      62 lamps on at dusk, off at dawn
+      80 lamps on at dusk, off at dawn, incl. solar bollards
     Playground
       tennis and badminton courts, stands, scoreboards
       two players only: challenge with E, accept with E
@@ -96,7 +98,7 @@ mindmap
 |---|---|---|
 | `index.html` | 276 | Every screen as static markup: `#screen-login`, `#screen-setup`, `#hud` (with `#card`, `#touch`, `#minimap`, `#feed`), `#modal`, `#toasts`, `#bootErr`. The start screen has `#roomStep` (join/create forms, `#roomRecent`, `#soloBtn`) and `#roomBar`; the HUD has `#bRoom`. It loads three.js r128, PeerJS 1.5.4 and qrcodejs 1.0.0 from cdnjs, then `js/app.js`. |
 | `css/styles.css` | 362 | `:root` tokens (bark, cream, gold, apple, the `--st-*` status colours and the `--f-body` (Atkinson Hyperlegible, all text) and `--f-display` (Pixelify Sans, 24px+ headings and numbers only) fonts), then components (`.panel .btn .tag .bubble .chip .bar .pips`) and per-screen styles. Pixel look: hard inset box-shadows, `image-rendering:pixelated`. |
-| `js/app.js` | 3371 | All logic in one `(function(){'use strict'; ... })();` IIFE. Lines are dense one-liners: read by range, not whole. |
+| `js/app.js` | 3561 | All logic in one `(function(){'use strict'; ... })();` IIFE. Lines are dense one-liners: read by range, not whole. |
 | `tests/harness.js` | 181 | `createClient({net,search})` runs app.js in its own `vm` context (fake DOM, cookie jar, localStorage, math-faithful THREE stub, strict Web Audio stub) and exposes internals as `client.G` by regex-replacing the final `})();`, so **keep `})();` as the last line of app.js**. `createPeerNet()` is an in-memory PeerJS stand-in (signalling + data connections, JSON-cloned messages, flushed every frame). `step(clients,n,dt,net)` advances several clients on one shared clock. |
 | `tests/room-test.js` | 230 | Host + two guests in one room (91 checks). |
 | `tests/smoke-test.js` | 567 | One browser on the harness (277 checks). |
@@ -125,12 +127,12 @@ There is no bundler, no framework and no server: rooms are peer-to-peer between 
 | 190 | Three.js core | `renderer`, `scene`, `camera`, fog, sky, lights, `sun` shadows (`SHADOWS`, off when `coarse`), `UNIT_BOX` |
 | 212 | Textures | `canvasTex`, `noiseTex`, `waterTex`, `glowTex`, 16px **atlas** `TILE_NAMES` (16 tiles), `blockGeo`, `BLOCK_TYPES` |
 | 269 | **World layout** | `N=96, HALF=48`, `tileMap`, `topMap` (collision height per cell: 0 ground, -1 water, 2 walls, 99 trunks), `idx`, `cellTop`, `solidRect`, `raiseTop/setTop` |
-| 282 | **ZONES** | desks (N, z -38..-17), pantry (E, x 18..33), restroom (W, x -31..-20), playroom (NE, x 16..31, z -31..-14, carpet, door on the west side), gym (NW, x -32..-17, z -31..-14, rubber floor, door on the east side), play (SE, x 22..44, z 8..37: open air and fenced, built in `buildFurniture`, not by the walled-zone loop), lake (S, z≈18..44). Each has `inside`, `gate` and `spoke` (index into `RING`, 8 points r=3.4 around the plaza); the playroom and gym also have `walk` (corner points between its gate on the Pantry path and its door) |
+| 282 | **ZONES** | desks (N, z -38..-17), pantry (E, x 18..33), restroom (W, x -31..-20), playroom (NE, x 16..31, z -31..-14, carpet, door on the west side), gym (NW, x -32..-17, z -31..-14, rubber floor, door on the east side), play (SE, x 22..44, z 8..37: open air and fenced, built in `buildFurniture`, not by the walled-zone loop), lake (S, z≈18..44). `ECO_AREAS` (just after) names the outdoor eco areas for `zoneAt`; they are not zones. Each zone has `inside`, `gate` and `spoke` (index into `RING`, 8 points r=3.4 around the plaza); the playroom and gym also have `walk` (corner points between its gate on the Pantry path and its door) |
 | 301 | Spots | `SPOTS[]`, `addSpot({zone,x,z,y,face,pose,approach,via,desk})`; poses are sit, stand, coffee, wash, stall (also the showers), look, arcade, gym (sofa seats also carry `sofa:true`). Desk spots also get `owner` (email) while a desk is built there |
-| 308 | `buildLayout()` | plaza disc, paths, zone floors and walls (glass for desks and pantry), lake ellipse `lakeE`, dock, hedge border |
+| 308 | `buildLayout()` | plaza disc, paths, zone floors and walls (glass for desks and pantry), lake ellipse `lakeE`, dock, Green Loop and lake trails, Meadow Walk, meadow and paver grounds (tiles `trail`, `paver`, `meadow`), green roof edges on every walled zone, hedge border |
 | 343 | `tree`, `bench`, `plant`, `sign` | furniture helpers; `fbox(...)` queues boxes into `FURN.noise/glow/glass` |
 | 396 | **Personal desks** | `DESK_SLOTS[]` (`{x,dz,tw,zc,spot,label:'Pod E · desk 3',desk}`), `DESK_ORDER` (slots nearest the door first), `dmat` (cached materials), `db`/`grp` box helpers, **`buildDesk(cfg)`** returns `{root,anim}` in desk-local space (sitter on +z facing -z; plant back-left, pet back-right, decor front corners, chair at z=1), `animateDesk` (pet bob/wag/swim, globe spin), **`placeDesk(slot,cfg,owner)`** / **`clearDesk(slot)`** (also set and reset `topMap` for the desk and chair), **`allocDesk(rec)`** (keeps a valid unshared slot or takes the next free one, -1 when full), `deskLabel` |
-| 511 | `buildFurniture()` | 6 desk pods x 4 = 24 **empty desk slots** with floor mats and desk spots (`desk:true`), pantry tables A/B with `pantryVia`, lights (`addLamp` for every area; see Day and night), the fishing rod stand by the lake path, restroom: 3 stalls (front walls with doorways, toilets inside) plus `STALLS[]` entries with a hinged door `pivot` and an Occupied `sign` (`STALL_MAT`), sinks with wash spots, plaza benches, **Orchard Board** (`boardMesh`, `BOARD_POS`), lake benches and viewpoints, signs |
+| 511 | `buildFurniture()` | 6 desk pods x 4 = 24 **empty desk slots** with floor mats and desk spots (`desk:true`), pantry tables A/B with `pantryVia`, lights (`addLamp` for every area; see Day and night), the fishing rod stand by the lake path, restroom: 3 stalls (front walls with doorways, toilets inside) plus `STALLS[]` entries with a hinged door `pivot` and an Occupied `sign` (`STALL_MAT`), sinks with wash spots, plaza benches, **Orchard Board** (`boardMesh`, `BOARD_POS`), lake benches and viewpoints, signs, then the **Eco campus** block: helpers `info` (fact board), `finger` (signpost), `recycle`, `refill`, `planter`, `living` (living wall), `solar`; Solar Grove, Wind Row (rotors in `ECO_SPIN`, turned in `frame`), Mobility Hub, Kitchen Garden, Wildflower Meadow, Heritage Orchard (benches are `zone:'plaza'` seats), floating wetlands, an info board per place, welcome arch, campus map (drawn from `tileMap`), fingerposts, bins, refill points, `bollard` lamps, plaza grasses |
 | 779 | `buildTrees()` | big plaza apple tree, so `TREE_APPLE_SLOTS`; random small trees and flowers |
 | 803 | `finalizeMeshes()` | turns the `BLOCKS` and `FURN` queues into InstancedMeshes |
 | 825 | Tree apples / board | `treeApples` InstancedMesh(40), `updateTreeApples`, `drawBoard()` (canvas texture), `clouds`, `ducks` |
@@ -199,6 +201,7 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 | Arcade games | Add a game to `GAMES` (keep the state JSON-friendly; read inputs as `{u,d,l,r,a}` for both players; versus games play the CPU when `!s.two`), then add a cabinet in the Playroom block of `buildFurniture` with `g` set to the game's index (mode `slots` games are single-player and can be seated). Arcade keys are latched (`arc.tap`), so a quick tap still reaches `step`; detect presses yourself (see Golden Reels' `s.prev`). Every game is fuzzed by the smoke test. The Player 2 protocol lives in `onDm`. |
 | Music and ambience | `THEMES`, `AMB` (~849). Sound effects are cases in `sfx` (~933). |
 | Avatar options | `AV` (~88) and the painter `paintSkin` (~548). Indexes are stored in cookies, so append new options rather than reordering. |
+| Campus scenery | The Eco campus block at the end of `buildFurniture`; new outdoor area names in `ECO_AREAS`. Keep it off paths, seat approaches and `via` points, use `zone:'plaza'` for any new bench (the routing check skips plaza seats), and run `npm test`. |
 | Move rooms or furniture | `ZONES` (~262), `buildLayout`, `buildFurniture`. After any change **run `npm test`**: the routing check catches spot-to-spot paths through solids and blocked seat approaches. |
 | HUD, card, modals | `renderMe`, `renderCard`, `openBoard/openInbox/openMenu` (~1180–1310) plus the matching markup in index.html |
 | Theme | `:root` in css/styles.css (lines 9–36) |
@@ -230,3 +233,12 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 npm test     # smoke test (277 checks) + room test (91 checks), Node 18+
 npm start    # static server on :5500
 ```
+
+## Navigation protocol (token-saving; follow every session)
+@.claude/map/TREE.md
+
+1. The mind-tree above is the map of this repo. Trust it; don't `ls`/`find`/glob to rediscover structure.
+2. Symbol, line number, or importers → `grep -n "<name>" .claude/map/SYMBOLS.md`, then Read only that range (offset/limit).
+3. Start from Hubs / Entry points / Routes and follow `→` import edges instead of broad searches.
+4. Map refreshes automatically (SessionStart + Stop hooks). Mid-turn after adding/moving files: `python3 ~/.claude/tools/mindtree.py`.
+5. Never hand-edit `.claude/map/*`; if it disagrees with disk, rerun the tool.
