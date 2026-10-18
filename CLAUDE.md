@@ -230,3 +230,12 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 npm test     # smoke test (277 checks) + room test (91 checks), Node 18+
 npm start    # static server on :5500
 ```
+
+## Navigation protocol (token-saving; follow every session)
+@.claude/map/TREE.md
+
+1. The mind-tree above is the map of this repo. Trust it; don't `ls`/`find`/glob to rediscover structure.
+2. Symbol, line number, or importers → `grep -n "<name>" .claude/map/SYMBOLS.md`, then Read only that range (offset/limit).
+3. Start from Hubs / Entry points / Routes and follow `→` import edges instead of broad searches.
+4. Map refreshes automatically (SessionStart + Stop hooks). Mid-turn after adding/moving files: `python3 ~/.claude/tools/mindtree.py`.
+5. Never hand-edit `.claude/map/*`; if it disagrees with disk, rerun the tool.
