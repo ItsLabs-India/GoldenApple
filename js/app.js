@@ -216,7 +216,7 @@ const waterTex=(()=>{const c=document.createElement('canvas');c.width=c.height=1
 const glowTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');const gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,230,140,1)');gr.addColorStop(0.4,'rgba(255,200,60,.45)');gr.addColorStop(1,'rgba(255,190,40,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);})();
 
 const TILE=16,ATLAS_COLS=8;
-const TILE_NAMES=['grassTop','grassSide','dirt','path','plaza','oak','pantry','tile','sand','logSide','logTop','leaves','plaster','brick','plank','hedge','carpet','rubber','court','court2','turf'];
+const TILE_NAMES=['grassTop','grassSide','dirt','path','plaza','oak','pantry','tile','sand','logSide','logTop','leaves','plaster','brick','plank','hedge','carpet','rubber','court','court2','turf','trail','paver','meadow'];
 const ATLAS_W=TILE*ATLAS_COLS,ATLAS_H=TILE*Math.ceil(TILE_NAMES.length/ATLAS_COLS);
 const atlasTex=(()=>{
   const c=document.createElement('canvas');c.width=ATLAS_W;c.height=ATLAS_H;const g=c.getContext('2d');const R=mulberry32(7);
@@ -244,7 +244,11 @@ const atlasTex=(()=>{
     rubber:(ox,oy)=>fill(ox,oy,()=>R()<0.09?pk(['#5a5f6a','#6a707c']):pk(['#2e3138','#33363e','#2a2d33'])),
     court:(ox,oy)=>fill(ox,oy,()=>pk(['#2f6fa8','#3474b0','#2b68a0','#3170ab'])),
     court2:(ox,oy)=>fill(ox,oy,()=>pk(['#3f9a5a','#43a05f','#3a9254','#41975a'])),
-    turf:(ox,oy)=>fill(ox,oy,()=>pk(['#3d6b35','#41723a','#386432','#3f6e37']))
+    turf:(ox,oy)=>fill(ox,oy,()=>pk(['#3d6b35','#41723a','#386432','#3f6e37'])),
+    // eco campus: decomposed-granite trail, permeable grass pavers, wildflower meadow
+    trail:(ox,oy)=>fill(ox,oy,()=>R()<0.08?pk(['#9c8158','#e2c99a']):pk(['#c9a877','#c19f6e','#d1b182','#bb9866'])),
+    paver:(ox,oy)=>fill(ox,oy,(x,y)=>(x%8<6&&y%8<6)?shade(x%8===0||y%8===0?'#c9c5bb':'#b3afa5',(R()-.5)*0.06):pk(['#5aa83a','#4f9a33','#63b443'])),
+    meadow:(ox,oy)=>fill(ox,oy,()=>R()<0.08?pk(['#f2b632','#f4f1ea','#9c6bd6','#ff8fb3','#e0442e']):pk(['#6aa83a','#73b443','#5f9a33','#7cbf4c','#68a539']))
   };
   TILE_NAMES.forEach((n,i)=>P[n]((i%ATLAS_COLS)*TILE,Math.floor(i/ATLAS_COLS)*TILE));
   return canvasTex(c);
@@ -260,7 +264,8 @@ function blockGeo(top,side,bottom){
 const BLOCK_TYPES={
   grass:['grassTop','grassSide','dirt'],path:['path','dirt','dirt'],plaza:['plaza','plaza','plaza'],oak:['oak','dirt','dirt'],
   pantry:['pantry','dirt','dirt'],tile:['tile','dirt','dirt'],sand:['sand','sand','sand'],plank:['plank','plank','plank'],
-  log:['logTop','logSide','logTop'],leaves:['leaves','leaves','leaves'],plaster:['plaster','plaster','plaster'],brick:['brick','brick','brick'],hedge:['hedge','hedge','hedge'],carpet:['carpet','dirt','dirt'],rubber:['rubber','dirt','dirt'],court:['court','dirt','dirt'],court2:['court2','dirt','dirt'],turf:['turf','dirt','dirt']
+  log:['logTop','logSide','logTop'],leaves:['leaves','leaves','leaves'],plaster:['plaster','plaster','plaster'],brick:['brick','brick','brick'],hedge:['hedge','hedge','hedge'],carpet:['carpet','dirt','dirt'],rubber:['rubber','dirt','dirt'],court:['court','dirt','dirt'],court2:['court2','dirt','dirt'],turf:['turf','dirt','dirt'],
+  trail:['trail','dirt','dirt'],paver:['paver','dirt','dirt'],meadow:['meadow','grassSide','dirt'],soil:['dirt','dirt','dirt']
 };
 
 /* =========================================================
@@ -292,6 +297,9 @@ const ZONES={
   gym:{name:'Gym',x0:-32,x1:-17,z0:-31,z1:-14,floor:'rubber',wall:'plaster',glass:true,door:{side:'e',from:-23,to:-20},inside:{x:-18.8,z:-21},gate:{x:-15,z:0.5},walk:[{x:-15,z:-21}],spoke:6}
 };
 const RING=[];for(let i=0;i<8;i++){const a=i*Math.PI/4;RING.push({x:Math.sin(a)*3.4,z:-Math.cos(a)*3.4});}
+// eco campus areas outside the buildings (decoration and HUD names only; see the Eco campus block in buildFurniture)
+const ECO_AREAS=[{name:'Kitchen Garden',x0:-39,x1:-18,z0:-41,z1:-32},{name:'Solar Grove',x0:17,x1:39,z0:-41,z1:-32},{name:'Wind Row',x0:33,x1:40,z0:-31,z1:-10},
+  {name:'Mobility Hub',x0:34,x1:45,z0:-10,z1:7},{name:'Heritage Orchard',x0:-39,x1:-22,z0:11,z1:40},{name:'Wildflower Meadow',x0:-39,x1:-32,z0:-31,z1:8}];
 function ringPath(a,b){const out=[];let d=((b-a)%8+8)%8;const step=d<=4?1:-1;if(d>4)d=8-d;for(let k=0;k<=d;k++)out.push(RING[((a+step*k)%8+8)%8]);return out;}
 
 const BLOCKS={};for(const k in BLOCK_TYPES)BLOCKS[k]=[];
@@ -324,10 +332,18 @@ function buildLayout(){
       addBlock(Z.wall,cx+0.5,0.5,cz+0.5);
       if(Z.glass)fbox(cx+0.5,1.5,cz+0.5,1,1,1,'#cfeeff','glass');else addBlock(Z.wall,cx+0.5,1.5,cz+0.5);
       setTop(cx,cz,2);
+      fbox(cx+0.5,2.04,cz+0.5,1.02,0.08,1.02,(cx+cz)%2?'#5aa83a':'#4f9a33');if((cx*7+cz*3)%5===0)fbox(cx+0.5,2.2,cz+0.5,0.56,0.26,0.56,(cx+cz)%3?'#3f8f2f':'#6cbf4c');// green roof edge
     }}
   // lake
   for(let cx=-24;cx<24;cx++)for(let cz=18;cz<44;cz++){const e=lakeE(cx+0.5,cz+0.5);if(e<=1){setTile(cx,cz,'water');setTop(cx,cz,-1);}else if(e<=1.32&&getTile(cx,cz)!=='path')setTile(cx,cz,'sand');}
   for(let cx=-1;cx<=0;cx++)for(let cz=21;cz<=31;cz++){setTile(cx,cz,'dock');setTop(cx,cz,0);}
+  // eco campus: the Green Loop trail round the grounds (north, west, south arms and the east arm down to the Mobility Hub), a trail round the lake,
+  // spurs from the Gym and Playroom paths up to the loop, the Meadow Walk west of the spawn and the orchard lane
+  for(let cx=-24;cx<24;cx++)for(let cz=18;cz<44;cz++){const e=lakeE(cx+0.5,cz+0.5);if(e>1.32&&e<=1.6)rect(cx,cx,cz,cz,'trail');}
+  rect(-41,41,-43,-42,'trail');rect(-41,-40,-43,42,'trail');rect(-41,41,41,42,'trail');rect(40,41,-43,6,'trail');
+  rect(14,15,-41,-24,'path');rect(-16,-15,-41,-24,'path');rect(-39,-3,9,10,'path');rect(-31,-29,11,40,'trail');
+  rect(17,38,-41,-33,'meadow');rect(-39,-33,-31,8,'meadow');rect(-39,-22,11,40,'meadow');rect(-44,44,43,44,'meadow');rect(-44,-42,-44,44,'meadow');
+  rect(-33,-19,-40,-34,'paver');rect(34,44,-9,6,'paver');
   // border hedge
   for(let cx=-HALF;cx<HALF;cx++)for(let cz=-HALF;cz<HALF;cz++){if(cx<=-46||cx>=45||cz<=-46||cz>=45){setTile(cx,cz,'hedge');setTop(cx,cz,3);}}
   // ground blocks
@@ -379,15 +395,16 @@ const FONT_UI='"Atkinson Hyperlegible",system-ui,"Segoe UI",Roboto,sans-serif',F
 function textCanvas(w,h,draw,S){S=S||1;const c=document.createElement('canvas');c.width=w*S;c.height=h*S;const g=c.getContext('2d');if(S!==1)g.setTransform(S,0,0,S,0,0);draw(g,w,h);return c;}
 function textTex(c){const t=new THREE.CanvasTexture(c);t.magFilter=THREE.LinearFilter;t.minFilter=THREE.LinearFilter;t.generateMipmaps=false;return t;}// smooth text, no pixel blocks
 const SIGN_DRAWERS=[];
+function leafIcon(g,x,y,r){g.save();g.translate(x,y);g.rotate(-0.6);g.fillStyle='#8fd16a';g.beginPath();g.moveTo(0,-r);g.lineTo(r*0.45,-r*0.55);g.lineTo(r*0.55,0);g.lineTo(r*0.4,r*0.55);g.lineTo(0,r);g.lineTo(-r*0.4,r*0.55);g.lineTo(-r*0.55,0);g.lineTo(-r*0.45,-r*0.55);g.closePath();g.fill();g.strokeStyle='#2c5a24';g.lineWidth=Math.max(1,r*0.12);g.beginPath();g.moveTo(0,-r*0.85);g.lineTo(0,r*1.25);g.stroke();g.restore();}
 function sign(x,z,rot,title,sub){
   const fx=Math.sin(rot),fz=Math.cos(rot);
   fbox(x-fx*0.08,0.85,z-fz*0.08,0.14,1.7,0.14,'#6b4a2b');
-  fbox(x,1.62,z,2.0,0.74,0.1,'#8c6234','noise',rot);
+  fbox(x,1.62,z,2.0,0.74,0.1,'#5b3a1e','noise',rot);fbox(x,2.03,z,2.08,0.08,0.22,'#4f9a33','noise',rot);
   solidRect(x-0.3,z-0.3,x+0.3,z+0.3,2);
   const c=textCanvas(256,96,()=>{},2);const tex=textTex(c);
-  const draw=()=>{const g=c.getContext('2d');g.fillStyle='#a8793f';g.fillRect(0,0,256,96);g.fillStyle='#7a5328';for(let y=23;y<96;y+=24)g.fillRect(0,y,256,2);
-    g.fillStyle='#2a1a0c';g.textAlign='center';g.font='700 32px '+FONT_UI;g.fillText(title.toUpperCase(),128,46);
-    g.font='700 20px '+FONT_UI;g.fillStyle='#4a2f16';g.fillText(sub,128,77);tex.needsUpdate=true;};
+  const draw=()=>{const g=c.getContext('2d');g.fillStyle='#f3ead2';g.fillRect(0,0,256,96);g.fillStyle='#3f7d34';g.fillRect(0,0,256,54);g.fillStyle='#8fd16a';g.fillRect(0,54,256,3);
+    leafIcon(g,22,27,13);g.fillStyle='#ffffff';g.textAlign='center';g.font='700 30px '+FONT_UI;g.fillText(title.toUpperCase(),136,38);
+    g.font='700 20px '+FONT_UI;g.fillStyle='#3a2a1a';g.fillText(sub,128,82);tex.needsUpdate=true;};
   draw();SIGN_DRAWERS.push(draw);
   const m=new THREE.Mesh(new THREE.PlaneGeometry(1.9,0.66),new THREE.MeshBasicMaterial({map:tex}));
   m.position.set(x+fx*0.056,1.62,z+fz*0.056);m.rotation.y=rot;scene.add(m);
@@ -399,22 +416,24 @@ const LAMPS=[];// {kind,zone,x,z,bulb,halo,haloMat,pool,poolMat,on,fade,at,cool}
 const LAMP_MAT={off:new THREE.MeshLambertMaterial({color:0xd9d4c4}),on:new THREE.MeshBasicMaterial({color:0xffe6a8}),cool:new THREE.MeshBasicMaterial({color:0xeaf6ff})};
 const POOL_GEO=new THREE.PlaneGeometry(2,2),LR=mulberry32(77);// own RNG so the seeded world layout doesn't shift
 const poolTex=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d'),gr=g.createRadialGradient(32,32,0,32,32,32);gr.addColorStop(0,'rgba(255,226,170,0.9)');gr.addColorStop(0.5,'rgba(255,214,150,0.35)');gr.addColorStop(1,'rgba(255,200,120,0)');g.fillStyle=gr;g.fillRect(0,0,64,64);return new THREE.CanvasTexture(c);})();
-// kinds: street (outdoor post), floor (indoor floor lamp), wall (sconce; o.px/o.pz put its pool into the room), lantern (dock post)
+// kinds: street (outdoor post), floor (indoor floor lamp), wall (sconce; o.px/o.pz put its pool into the room), lantern (dock post), bollard (solar trail light)
 function addLamp(kind,x,z,o){
-  o=o||{};const y={street:2.8,floor:1.95,wall:1.9,lantern:0.42}[kind],cool=!!o.cool;
+  o=o||{};const y={street:2.8,floor:1.95,wall:1.9,lantern:0.42,bollard:0.86}[kind],cool=!!o.cool;
   if(kind==='street'){fbox(x,0.06,z,0.34,0.12,0.34,'#2c2c30');fbox(x,1.4,z,0.14,2.8,0.14,'#2c2c30');fbox(x,2.92,z,0.46,0.12,0.46,'#3a3a44');solidRect(x-0.2,z-0.2,x+0.2,z+0.2,3);}
   else if(kind==='floor'){fbox(x,0.03,z,0.36,0.06,0.36,'#3a3a44');fbox(x,0.9,z,0.06,1.75,0.06,'#3a3a44');solidRect(x-0.2,z-0.2,x+0.2,z+0.2,2);}
   else if(kind==='wall')fbox(x,y+0.13,z,0.22,0.06,0.22,'#9aa3aa');
+  else if(kind==='bollard'){fbox(x,0.38,z,0.2,0.76,0.2,'#5b3a1e');fbox(x,0.97,z,0.3,0.04,0.3,'#1d3557');fbox(x,0.995,z,0.26,0.012,0.26,'#3f6fa8','glow');solidRect(x-0.15,z-0.15,x+0.15,z+0.15,1.1);}
   const bulb=new THREE.Mesh(UNIT_BOX,LAMP_MAT.off);bulb.position.set(x,kind==='street'?y-0.02:y,z);
-  bulb.scale.set(...({street:[0.32,0.07,0.32],floor:[0.42,0.3,0.42],wall:[0.18,0.14,0.18],lantern:[0.16,0.18,0.16]}[kind]));scene.add(bulb);
+  bulb.scale.set(...({street:[0.32,0.07,0.32],floor:[0.42,0.3,0.42],wall:[0.18,0.14,0.18],lantern:[0.16,0.18,0.16],bollard:[0.16,0.16,0.16]}[kind]));scene.add(bulb);
   const haloMat=new THREE.SpriteMaterial({map:glowTex,color:cool?0xeaf6ff:0xffd890,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
-  const halo=new THREE.Sprite(haloMat);halo.scale.setScalar({street:2.2,floor:1.6,wall:1.2,lantern:1.1}[kind]);halo.position.set(x,y-0.05,z);halo.visible=false;scene.add(halo);
+  const halo=new THREE.Sprite(haloMat);halo.scale.setScalar({street:2.2,floor:1.6,wall:1.2,lantern:1.1,bollard:1.0}[kind]);halo.position.set(x,y-0.05,z);halo.visible=false;scene.add(halo);
   const poolMat=new THREE.MeshBasicMaterial({map:poolTex,color:cool?0xdcecff:0xffffff,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending});
-  const pool=new THREE.Mesh(POOL_GEO,poolMat);pool.rotation.x=-Math.PI/2;pool.scale.setScalar({street:3.6,floor:2.6,wall:2.2,lantern:1.8}[kind]);
+  const pool=new THREE.Mesh(POOL_GEO,poolMat);pool.rotation.x=-Math.PI/2;pool.scale.setScalar({street:3.6,floor:2.6,wall:2.2,lantern:1.8,bollard:2.2}[kind]);
   pool.position.set(o.px!=null?o.px:x,kind==='lantern'?-0.15:0.035,o.pz!=null?o.pz:z);pool.visible=false;pool.renderOrder=3;scene.add(pool);
   LAMPS.push({kind,zone:o.zone||'path',x,z,bulb,halo,haloMat,pool,poolMat,on:false,fade:0,at:LR()*0.08,cool});
 }
 let arcBanner=null;// the turning ARCADE crown over the cabinet circle
+const ECO_SPIN=[];// wind turbine rotors (Eco campus), turned in frame()
 const ARCADES=[];// playroom cabinets, filled by buildFurniture: {i,x,z,spot,canvas,tex,screen}
 // the two courts (lines x0..x1, z0..z1, net across z=net at height netH; area = where each half's player may stand)
 const COURTS=[{i:0,sport:'tennis',cx:28,x0:24,x1:32,z0:13.5,z1:31.5,net:22.5,netH:0.95,area:{x0:23,x1:33,z0:11,z1:32.6},bx:22.62,brot:Math.PI/2,board:null},
@@ -772,6 +791,173 @@ function buildFurniture(){
   sign(12.6,-4.6,Math.PI/2,'Playroom','Arcade · Sofas');
   sign(-12.6,-4.6,-Math.PI/2,'Gym','Cardio · Weights');
   sign(20.6,11.8,-Math.PI/2,'Playground','Tennis · Badminton');
+  /* --- Eco campus: Green Loop, solar grove, wind row, mobility hub, kitchen garden, meadow, orchard, living walls, info boards and wayfinding.
+     Decoration only: everything is fbox/meshes plus solidRect collision; the only new seats are plain benches (zone plaza, outside the routing check). --- */
+  const ECO_GREEN='#3f7d34',TIMBER='#5b3a1e';
+  // info board on two posts facing rot: a green header and a few short lines of facts
+  const info=(x,z,rot,title,lines)=>{const fx=Math.sin(rot),fz=Math.cos(rot),ux=Math.cos(rot),uz=-Math.sin(rot);
+    for(const s of [-0.62,0.62])fbox(x+ux*s-fx*0.13,0.75,z+uz*s-fz*0.13,0.1,1.5,0.1,TIMBER);
+    fbox(x-fx*0.05,1.42,z-fz*0.05,1.56,1.04,0.06,TIMBER,'noise',rot);fbox(x-fx*0.05,1.98,z-fz*0.05,1.66,0.08,0.26,'#4f9a33','noise',rot);
+    const al=Math.abs(ux)>0.7;solidRect(x-(al?0.5:0.3),z-(al?0.3:0.5),x+(al?0.5:0.3),z+(al?0.3:0.5),2);
+    const m=panel(240,160,1.48,0.98,(g,w,h)=>{g.fillStyle='#f3ead2';g.fillRect(0,0,w,h);g.fillStyle=ECO_GREEN;g.fillRect(0,0,w,38);g.fillStyle='#8fd16a';g.fillRect(0,38,w,3);leafIcon(g,18,19,10);
+      g.textAlign='left';g.fillStyle='#ffffff';g.font='700 19px '+FONT_UI;g.fillText(title,34,26);
+      g.fillStyle='#2a1a0c';g.font='400 14px '+FONT_UI;lines.forEach((l,i)=>g.fillText(l,12,61+i*20));
+      g.fillStyle='#7a6a52';g.font='400 10px '+FONT_UI;g.fillText('Golden Apple Green Campus',12,h-7);});
+    m.position.set(x,1.42,z);m.rotation.y=rot;scene.add(m);};
+  // fingerpost: arms [angle,text], angle = the way the arm points (0 south, PI north, PI/2 east, -PI/2 west); text reads from both sides
+  const finger=(x,z,arms)=>{fbox(x,1.35,z,0.16,2.7,0.16,TIMBER);fbox(x,2.74,z,0.3,0.1,0.3,'#4f9a33');solidRect(x-0.3,z-0.3,x+0.3,z+0.3,2.7);
+    arms.forEach(([a,txt],i)=>{const y=2.46-i*0.3,dx=Math.sin(a),dz=Math.cos(a),r=a-Math.PI/2,cx=x+dx*0.66,cz=z+dz*0.66;
+      fbox(cx,y,cz,1.12,0.26,0.05,'#f3ead2','noise',r);
+      for(const back of [0,1]){const m=panel(176,40,1.1,0.25,(g,w,h)=>{g.fillStyle=ECO_GREEN;g.fillRect(0,0,w,h);g.fillStyle='#ffffff';const tip=back?6:w-6,base=back?22:w-22;
+          g.beginPath();g.moveTo(tip,h/2);g.lineTo(base,7);g.lineTo(base,h-7);g.closePath();g.fill();g.textAlign='center';g.font='700 15px '+FONT_UI;g.fillText(txt,back?w/2+9:w/2-9,h/2+5);});
+        const n=back?-1:1;m.position.set(cx+Math.sin(r)*n*0.03,y,cz+Math.cos(r)*n*0.03);m.rotation.y=r+(back?Math.PI:0);scene.add(m);}});};
+  // compost / recycling / landfill bins, and a water refill station (both face south)
+  const recycle=(x,z)=>{[['#3f8f3f','#2e6a24','#8fd16a'],['#2f6fc2','#24589e','#8fc4ff'],['#5a5f6a','#45484f','#c5ccd2']].forEach(([c,lid,l],i)=>{const bx=x+(i-1)*0.44;
+    fbox(bx,0.4,z,0.4,0.8,0.42,c);fbox(bx,0.82,z,0.42,0.05,0.44,lid);fbox(bx,0.6,z+0.215,0.22,0.06,0.01,l,'glow');});solidRect(x-0.66,z-0.22,x+0.66,z+0.22,1);};
+  const refill=(x,z)=>{fbox(x,0.55,z,0.42,1.1,0.32,'#2f6fc2');fbox(x,1.12,z,0.46,0.06,0.36,'#c5ccd2');fbox(x,0.8,z+0.165,0.24,0.3,0.01,'#8fd0f5','glow');fbox(x,0.62,z+0.2,0.08,0.04,0.08,'#c5ccd2');solidRect(x-0.25,z-0.2,x+0.25,z+0.2,1.2);};
+  const planter=(x,z,w,d,flower)=>{fbox(x,0.25,z,w,0.5,d,'#8a5a33');fbox(x,0.52,z,w-0.08,0.04,d-0.08,'#5c3f24');
+    for(let i=0,n=Math.round(w*d*3);i<n;i++){const px=x+((i*0.618)%1-0.5)*(w-0.2),pz=z+((i*0.382+0.19)%1-0.5)*(d-0.2);fbox(px,0.66,pz,0.16,0.24,0.16,i%3?'#3f8f2f':'#5aad42');if(i%2)fbox(px,0.81,pz,0.1,0.06,0.1,flower);}
+    solidRect(x-w/2,z-d/2,x+w/2,z+d/2,0.9);};
+  // living wall: a planted panel on the outside face of a building wall (x0===x1 runs north-south)
+  const living=(x0,z0,x1,z1)=>{const L=Math.hypot(x1-x0,z1-z0),rot=x0===x1?Math.PI/2:0,cols=['#5aad42','#2e6a24','#6cbf4c','#4f9a33','#f2b632','#ff8fb3','#9c6bd6'];
+    fbox((x0+x1)/2,1.0,(z0+z1)/2,L,1.9,0.12,'#3f8f2f','noise',rot);
+    for(let i=0;i<L*5;i++){const f=(i*0.618)%1,y=0.18+((i*0.382)%1)*1.64;fbox(x0+(x1-x0)*f,y,z0+(z1-z0)*f,0.24,0.2,0.24,cols[i%7]);}};
+  const pvCanvas=(()=>{const c=document.createElement('canvas');c.width=32;c.height=16;const g=c.getContext('2d');g.fillStyle='#c5ccd2';g.fillRect(0,0,32,16);
+    for(let y=0;y<4;y++)for(let x=0;x<8;x++){g.fillStyle=(x+y)%2?'#1d3557':'#23406a';g.fillRect(x*4+0.5,y*4+0.5,3,3);}return c;})();
+  const pvMat=new THREE.MeshLambertMaterial({map:canvasTex(pvCanvas)}),pvRoofMat=new THREE.MeshLambertMaterial({map:canvasTex(pvCanvas,[1,4])});
+  // a solar array: one panel tilted about x (north edge up), so it faces the sun in the south
+  const solar=(x,z,y,w,d,tilt,mat)=>{const g=grp(scene,x,y,z);g.rotation.x=tilt;const m=new THREE.Mesh(UNIT_BOX,mat||pvMat);m.scale.set(w,0.06,d);m.castShadow=SHADOWS;m.receiveShadow=true;g.add(m);};
+
+  // Green Loop trailhead (north), with benches looking out over the loop and planters along the desk building
+  info(0,-40.4,Math.PI,'Green Loop',['A 300 m walking and jogging','trail round the whole campus','Solar lights come on at dusk','Hold Shift to run']);
+  bench(-7,-39.7,Math.PI,'#8a5a33','plaza');bench(7,-39.7,Math.PI,'#8a5a33','plaza');
+  planter(-12,-39.6,2.2,0.8,'#9c6bd6');planter(-3,-39.6,2.0,0.8,'#f2b632');planter(3,-39.6,2.0,0.8,'#ff8fb3');planter(12,-39.6,2.2,0.8,'#9c6bd6');
+  planter(-8.2,-15.6,9.6,0.7,'#ff8fb3');planter(8.4,-15.6,9.2,0.7,'#f2b632');
+
+  // Solar Grove: two rows of tilted arrays over a wildflower meadow, kept short by two sheep
+  for(const z of [-38.9,-35.4])for(const x of [20.2,23.8,27.4,31,34.6]){
+    solar(x,z,1.05,3.2,1.7,0.42);for(const s of [-1.3,1.3]){fbox(x+s,0.36,z+0.62,0.08,0.72,0.08,'#9aa3aa');fbox(x+s,0.66,z-0.62,0.08,1.32,0.08,'#9aa3aa');}
+    solidRect(x-1.6,z-0.85,x+1.6,z+0.85,1.5);}
+  for(const [x,z,r] of [[25.6,-37.4,0],[32.6,-37.5,Math.PI]]){const fx=Math.cos(r);fbox(x,0.6,z,0.9,0.55,0.55,'#f4f1ea','noise',r);fbox(x+fx*0.5,0.72,z,0.3,0.3,0.3,'#2a2a2a','noise',r);
+    for(const [a,b] of [[-0.3,-0.18],[-0.3,0.18],[0.3,-0.18],[0.3,0.18]])fbox(x+a,0.17,z+b,0.08,0.34,0.08,'#2a2a2a');solidRect(x-0.45,z-0.3,x+0.45,z+0.3,1);}
+  info(27.6,-40.6,Math.PI,'Solar Grove',['10 tilted arrays face the sun','Wildflowers grow underneath','Two sheep keep the grass short','Powers the campus by day']);
+
+  // Wind Row: three small turbines (rotors turn in frame) and two battery stores between them
+  for(const [z,ph] of [[-28,0],[-20.5,1.1],[-13,2.3]]){const x=36.5;
+    fbox(x,0.15,z,1.1,0.3,1.1,'#c5ccd2');fbox(x,3.6,z,0.34,7.2,0.34,'#eef2f4');fbox(x,7.25,z,1.0,0.42,0.46,'#e8eef0');fbox(x-0.55,7.25,z,0.14,0.2,0.2,'#c5ccd2');
+    const R=grp(scene,x-0.66,7.25,z);R.rotation.x=ph;R.userData.w=0.9+ph*0.15;db(R,0,0,0,0.16,0.3,0.3,'#d9e2e6');
+    for(let k=0;k<3;k++){const B=grp(R,0,0,0);B.rotation.x=k*Math.PI*2/3;db(B,0,1.35,0,0.05,2.5,0.26,'#f4f7f8');db(B,0,2.5,0,0.05,0.3,0.14,'#e0442e');}
+    ECO_SPIN.push(R);solidRect(x-0.5,z-0.5,x+0.5,z+0.5,3);}
+  for(const z of [-24.25,-16.75]){fbox(35,1.1,z,1.6,2.2,3.0,'#2f7f4a');fbox(35,1.6,z,1.62,0.3,3.02,'#f4f1ea');for(const o of [-0.9,0,0.9])fbox(35.81,0.9,z+o,0.02,0.1,0.1,'#6cff8a','glow');solidRect(34.2,z-1.5,35.8,z+1.5,2.2);}
+  info(38.9,-24.25,Math.PI/2,'Wind Row',['3 small wind turbines','Battery stores save sunshine','for the 80 campus lamps,','on at dusk and off at dawn']);
+
+  // Mobility Hub: a solar carport over the bike racks, two EV bays with chargers and the electric campus shuttle
+  for(const z of [-7.5,-1,5])for(const x of [35,38.6]){fbox(x,1.4,z,0.16,2.8,0.16,'#9aa3aa');solidRect(x-0.15,z-0.15,x+0.15,z+0.15,2.8);}
+  solar(36.8,-1.25,2.86,4.4,13.6,0,pvRoofMat);fbox(36.8,2.76,-1.25,4.5,0.08,13.7,'#c5ccd2');
+  fbox(36.8,0.05,-1,0.1,0.1,12,'#9aa3aa');
+  for(let i=0;i<11;i++){const bz=-6.5+i*1.1,bx=36.8,c=['#e0442e','#2f6fc2','#f2b632','#3f8f3f','#6d4bb5'][i%5];
+    for(const s of [-0.42,0.42])fbox(bx+s,0.3,bz,0.56,0.56,0.05,'#2b2d33');fbox(bx,0.5,bz,0.8,0.06,0.05,c);fbox(bx-0.12,0.42,bz,0.06,0.3,0.05,c);
+    fbox(bx-0.25,0.72,bz,0.22,0.05,0.1,'#2b2d33');fbox(bx+0.32,0.78,bz,0.05,0.05,0.42,'#2b2d33');}
+  solidRect(36.2,-7,37.4,5,1);
+  for(const [cz,c] of [[-6.6,'#f4f1ea'],[-3.4,'#2f6fc2']]){const cx=43.4;fbox(cx,0.011,cz,2.4,0.01,1.5,'#3f8f3f');fbox(cx,0.015,cz-0.8,2.5,0.02,0.06,'#f4f1ea');
+    fbox(cx,0.5,cz,2.0,0.5,1.15,c);fbox(cx-0.1,0.98,cz,1.1,0.46,1.05,'#9cc8ec');fbox(cx-0.1,1.23,cz,1.12,0.05,1.07,c);
+    for(const a of [-0.62,0.62])for(const b of [-0.6,0.6])fbox(cx+a,0.22,cz+b,0.44,0.44,0.08,'#1c1c24');fbox(cx-1.01,0.55,cz,0.02,0.1,0.9,'#ffe9b0','glow');
+    fbox(44.72,0.6,cz,0.2,1.2,0.3,'#e8eef0');fbox(44.61,0.95,cz,0.02,0.16,0.16,'#6cff8a','glow');solidRect(cx-1,cz-0.6,cx+1,cz+0.6,1.4);solidRect(44.6,cz-0.15,44.85,cz+0.15,1.2);}
+  fbox(43.3,1.25,2.6,1.9,1.9,5.0,'#f4f1ea');fbox(43.3,0.55,2.6,1.92,0.5,5.02,'#3f8f3f');fbox(43.3,1.55,2.6,1.94,0.6,4.6,'#9cc8ec');
+  fbox(43.3,2.24,2.6,1.6,0.05,3.6,'#1d3557');fbox(43.3,1.95,5.11,1.4,0.25,0.02,'#f2b632','glow');for(const a of [-0.8,0.8])for(const b of [0.9,4.3])fbox(43.3+a,0.25,b,0.1,0.5,0.5,'#1c1c24');
+  solidRect(42.35,0.1,44.25,5.1,2.4);
+  info(38.9,-8.6,Math.PI/2,'Mobility Hub',['Solar carport: 11 bike racks','2 EV bays, solar charged','Electric campus shuttle','Walk, cycle or share a ride']);
+  planter(34.4,-0.5,0.7,15,'#f2b632');
+
+  // Kitchen Garden: a greenhouse, raised beds, compost bays, a tool shed with a green roof and rain barrels
+  {const gx=-35.5,gz=-36.5;for(const [x,z,w,d] of [[gx,-39.6,4.6,0.06],[gx,-33.4,4.6,0.06],[-37.8,gz,0.06,6.2],[-33.2,gz,0.06,6.2]])fbox(x,1.1,z,w,2.2,d,'#cfeeff','glass');
+    for(const x of [-37.8,-35.5,-33.2])for(const z of [-39.6,-36.5,-33.4])fbox(x,1.15,z,0.08,2.3,0.08,'#f4f7f8');
+    fbox(gx,2.28,gz,4.8,0.06,6.4,'#cfeeff','glass');fbox(gx,2.46,gz,2.4,0.06,6.4,'#cfeeff','glass');fbox(gx,2.56,gz,0.12,0.12,6.4,'#f4f7f8');
+    for(const x of [-36.9,-34.1]){fbox(x,0.7,gz,1.0,0.08,5.2,'#8a5a33');fbox(x,0.35,gz,0.08,0.7,5.0,'#8a5a33');for(let i=0;i<10;i++)fbox(x+((i%2)-0.5)*0.5,0.82,gz-2.2+i*0.48,0.16,0.16,0.16,i%3?'#5aad42':'#3f8f2f');}
+    solidRect(-37.8,-39.6,-33.2,-33.4,2.3);}
+  const crop=(k,x,z)=>{for(let i=0;i<8;i++){const px=x-1.2+(i%4)*0.8,pz=z+(i<4?-0.3:0.3);
+    if(k===0)fbox(px,0.6,pz,0.3,0.18,0.3,i%2?'#7fc23a':'#5aad42');
+    else if(k===1){fbox(px,0.85,pz,0.04,0.7,0.04,'#a8793f');fbox(px,0.8,pz,0.24,0.4,0.24,'#3f8f2f');fbox(px+0.08,0.78,pz+0.1,0.1,0.1,0.1,'#e0442e');fbox(px-0.08,0.92,pz-0.08,0.1,0.1,0.1,'#e0442e');}
+    else if(k===2){fbox(px,0.54,pz,0.1,0.06,0.1,'#ef7f2a');fbox(px,0.7,pz,0.18,0.26,0.06,'#6cbf4c');}
+    else if(k===3){if(i%2)continue;fbox(px,1.1,pz,0.06,1.2,0.06,'#4f9a33');fbox(px,1.75,pz+0.04,0.42,0.42,0.06,'#f2b632');fbox(px,1.75,pz+0.075,0.18,0.18,0.02,'#6b4a2b');}
+    else if(k===4){fbox(px,0.66,pz,0.3,0.3,0.3,'#6d8f5a');fbox(px,0.86,pz,0.2,0.14,0.2,'#9c6bd6');}
+    else{if(i%2){fbox(px,0.62,pz,0.42,0.3,0.42,'#ef7f2a');fbox(px,0.8,pz,0.06,0.08,0.06,'#4f9a33');}else fbox(px,0.58,pz,0.5,0.1,0.5,'#4f9a33');}}};
+  {let k=0;for(const z of [-38.8,-35.6])for(const x of [-30.5,-26.5,-22.5]){fbox(x,0.25,z,3.0,0.5,1.3,'#8a5a33');fbox(x,0.51,z,2.86,0.04,1.16,'#5c3f24');crop(k++,x,z);solidRect(x-1.5,z-0.65,x+1.5,z+0.65,0.9);}}
+  for(const z of [-39.4,-38.3,-37.2]){fbox(-20,0.45,z,1.0,0.9,1.0,'#8a5a33');fbox(-20,0.86,z,0.9,0.06,0.9,'#5c3f24');for(const y of [0.25,0.55])fbox(-19.49,y,z,0.02,0.06,0.9,'#6b4a2b');}
+  solidRect(-20.5,-39.9,-19.5,-36.7,1);
+  fbox(-20,1.05,-35.2,2.0,2.1,2.0,'#8a5a33');fbox(-20,2.2,-35.2,2.3,0.2,2.3,'#4f9a33');fbox(-20,2.34,-35.2,1.9,0.12,1.9,'#6cbf4c');fbox(-21.01,0.9,-35.2,0.02,1.7,0.8,'#5b3a1e');solidRect(-21,-36.2,-19,-34.2,2.5);
+  for(const x of [-32.6,-31.6]){fbox(x,0.45,-33.5,0.6,0.9,0.6,'#2f6fc2');fbox(x,0.92,-33.5,0.64,0.05,0.64,'#24589e');solidRect(x-0.3,-33.8,x+0.3,-33.2,1);}
+  info(-25.5,-40.6,Math.PI,'Kitchen Garden',['Herbs, salad and veg for the','Pantry, grown right here','Rain barrels water the beds','Compost turns scraps to soil']);
+
+  // Wildflower Meadow: beehives, a bee hotel and bird boxes, by the living walls of the Gym and the Restroom
+  for(const z of [-28.5,-27,-25.5]){fbox(-37.2,0.15,z,0.6,0.3,0.6,'#3a3a44');fbox(-37.2,0.62,z,0.56,0.64,0.56,'#f4f1ea');fbox(-37.2,0.98,z,0.64,0.08,0.64,'#f2b632');fbox(-37.2,0.4,z+0.29,0.2,0.04,0.01,'#2a1a0c');solidRect(-37.5,z-0.3,-36.9,z+0.3,1.1);}
+  fbox(-35.5,0.7,-20,0.12,1.4,0.12,TIMBER);fbox(-35.5,1.6,-20,1.0,0.8,0.3,'#a8793f');fbox(-35.5,2.04,-20,1.1,0.08,0.4,'#4f9a33');
+  for(let i=0;i<12;i++)fbox(-35.85+(i%4)*0.23,1.35+Math.floor(i/4)*0.24,-19.84,0.12,0.12,0.02,'#2a1a0c');solidRect(-35.8,-20.3,-35.2,-19.7,2);
+  for(const z of [-8,2]){fbox(-35.5,1.1,z,0.1,2.2,0.1,TIMBER);fbox(-35.5,2.35,z,0.36,0.4,0.36,'#a8793f');fbox(-35.5,2.6,z,0.44,0.08,0.44,'#c23a2b');fbox(-35.5,2.38,z+0.185,0.1,0.1,0.01,'#2a1a0c');solidRect(-35.8,z-0.3,-35.2,z+0.3,2.2);}
+  info(-38.6,-14,-Math.PI/2,'Wildflower Meadow',['Native flowers for bees and','butterflies, left long all','summer. Three hives and a','bee hotel feed the orchard']);
+  living(-32.06,-31,-32.06,-13);living(-31.06,-7,-31.06,7);living(-31,7.06,-19,7.06);living(32.06,-31,32.06,-13);living(-14,-38.06,14,-38.06);
+
+  // Heritage Orchard: four rows of apple trees either side of a trail, crates of apples, benches facing the lane
+  {let n=0;for(const x of [-36.5,-33.5,-25.5,-22.5])for(const z of [14.5,18.5,22.5,26.5,30.5,34.5,38.5]){n++;
+    fbox(x,0.7,z,0.28,1.4,0.28,'#6b4a2b');fbox(x,1.85,z,1.9,1.0,1.9,n%2?'#4a9c36':'#3f8f2f');fbox(x,2.5,z,1.3,0.5,1.3,'#5aad42');
+    for(let k=0;k<5;k++){const a=k*1.26+n,px=x+Math.sin(a)*0.97,pz=z+Math.cos(a)*0.97;fbox(px,1.5+(k%3)*0.3,pz,0.18,0.18,0.18,(n%7===3&&k===0)?'#f2b632':'#e0442e');}
+    solidRect(x-0.3,z-0.3,x+0.3,z+0.3,99);}}
+  bench(-32.6,20,Math.PI/2,'#8a5a33','plaza');bench(-27.4,20,-Math.PI/2,'#8a5a33','plaza');bench(-32.6,32,Math.PI/2,'#8a5a33','plaza');bench(-27.4,32,-Math.PI/2,'#8a5a33','plaza');
+  for(const z of [12.4,13.2]){fbox(-27.4,0.2,z,0.6,0.4,0.6,'#a8793f');for(let k=0;k<4;k++)fbox(-27.55+(k%2)*0.3,0.44,z-0.15+Math.floor(k/2)*0.3,0.2,0.18,0.2,'#e0442e');}solidRect(-27.7,12.1,-27.1,13.5,0.9);
+  info(-33.2,11.6,Math.PI,'Heritage Orchard',['28 apple trees in four rows','Give up to 10 apples a day','Receive more than 10 and','you become a Golden Apple']);
+
+  // Lake: two floating wetlands that clean the water
+  for(const [x,z,w,d] of [[-11.5,35.5,2.4,1.4],[10.5,25.5,2.0,1.2]]){fbox(x,-0.16,z,w,0.1,d,'#6b4a2b');
+    for(let i=0;i<9;i++){const px=x+((i*0.37)%1-0.5)*(w-0.3),pz=z+((i*0.61)%1-0.5)*(d-0.3);fbox(px,0.12,pz,0.1,0.5+(i%3)*0.12,0.1,'#5f8f3a');if(i%3===0)fbox(px,0.42+(i%3)*0.12,pz,0.16,0.1,0.16,'#f4f1ea');}}
+
+  // what each place offers, next to its sign (facts from the game itself)
+  info(-3.7,-14.4,0,'Work Desks',['24 desks in 6 pods, one each','Your desk is the gold square','on the minimap','Press E at your desk to sit']);
+  info(16.4,4.8,-Math.PI/2,'Pantry',['The menu changes every 5 min','E take · F eat · Q put down','Fresh coffee at the machine','Veg, non-veg, fruit, drinks']);
+  info(-16.4,4.8,Math.PI/2,'Restroom',['3 stalls and 2 showers','An Occupied sign on each door','Wash your hands at the sinks','after every visit']);
+  info(-12.6,-7.2,-Math.PI/2,'Gym',['6 cardio machines and a bag','5 strength spots, sets of 10','E start · W/S level · E stop','Water cooler by the door']);
+  info(12.6,-7.2,Math.PI/2,'Playroom',['5 arcade cabinets in a circle','10 Golden Reels slot machines','Player 2 can join in a room','2 sofas: the best indoor rest']);
+  info(-6.2,16.4,Math.PI/2,'Lakeside',['8 fish species, some only at','night. Take a rod from the','stand, cast, wait for the bite','and reel. K keep · R release']);
+  info(20.6,14.2,-Math.PI/2,'Playground',['Tennis and badminton courts','E to challenge, E to accept','First to 10, win by 2','Q leaves the match']);
+  info(-7.4,3.6,Math.PI/2,'Golden Apple Tree',['Give up to 10 apples a day','More than 10 received makes','you a Golden Apple. Red on','the tree: given today. Gold:','Golden Apple members']);
+
+  // welcome arch over the lake path by the spawn point
+  for(const x of [-3.1,3.1]){fbox(x,1.75,11.4,0.3,3.5,0.3,TIMBER);fbox(x,0.15,11.4,0.6,0.3,0.6,'#9aa3aa');}solidRect(-3.3,11.2,-2.9,11.6,3.5);solidRect(2.9,11.2,3.3,11.6,3.5);
+  fbox(0,3.55,11.4,6.8,0.22,0.36,TIMBER);fbox(0,3.72,11.4,7.0,0.12,0.5,'#4f9a33');fbox(0,3.1,11.4,4.7,0.7,0.12,ECO_GREEN);
+  for(const back of [0,1]){const m=panel(320,48,4.5,0.66,(g,w,h)=>{g.fillStyle=ECO_GREEN;g.fillRect(0,0,w,h);g.fillStyle='#8fd16a';g.fillRect(0,h-3,w,3);leafIcon(g,22,h/2,12);leafIcon(g,w-22,h/2,12);
+      g.fillStyle='#ffffff';g.textAlign='center';g.font='700 26px '+FONT_UI;g.fillText('GOLDEN APPLE CAMPUS',w/2,h/2+9);});
+    m.position.set(0,3.1,11.4+(back?-0.07:0.07));m.rotation.y=back?Math.PI:0;scene.add(m);}
+
+  // campus map with a numbered legend and "you are here", drawn from the finished layout (redrawn with the signs once fonts load)
+  const MAPC={grass:'#5aa83a',path:'#9b958c',plaza:'#b3ada3',oak:'#c8a36b',pantry:'#d9cfa9',tile:'#dfe8ec',sand:'#e3d29a',water:'#3b8fd6',dock:'#a8793f',hedge:'#24561c',carpet:'#5a3470',rubber:'#3a3d44',court:'#2f6fa8',court2:'#3f9a5a',turf:'#3d6b35',trail:'#d8b37a',paver:'#a3ae95',meadow:'#7cbf4c'};
+  const LEGEND=[['Work Desks',0,-27],['Pantry',25.5,-0.5],['Restroom',-25.5,-0.5],['Playroom',23.5,-22.5],['Gym',-24.5,-22.5],['Playground',33,23],['Lakeside',0,31],['Plaza',0,0],
+    ['Solar Grove',27.5,-37],['Wind Row',36.5,-21],['Mobility Hub',39,-1],['Kitchen Garden',-27,-37],['Wildflower Meadow',-36,-12],['Heritage Orchard',-30,25],['Green Loop',-40.5,-20]];
+  const MX=-5.6,MZ=12.4;for(const x of [MX-1.2,MX+1.2])fbox(x,1.1,MZ+0.15,0.12,2.2,0.12,TIMBER);fbox(MX,1.5,MZ+0.05,2.8,1.7,0.08,TIMBER);fbox(MX,2.4,MZ+0.05,2.9,0.08,0.3,'#4f9a33');solidRect(MX-1.3,MZ-0.2,MX+1.3,MZ+0.2,2.2);
+  const mapM=panel(360,216,2.6,1.56,(g,w,h)=>{g.fillStyle='#f3ead2';g.fillRect(0,0,w,h);g.fillStyle=ECO_GREEN;g.fillRect(0,0,w,30);leafIcon(g,16,15,9);
+    g.textAlign='left';g.fillStyle='#ffffff';g.font='700 18px '+FONT_UI;g.fillText('CAMPUS MAP',30,22);g.textAlign='right';g.font='400 12px '+FONT_UI;g.fillText('Golden Apple Green Campus',w-10,20);
+    const ox=8,oy=36,S=1.8,at=(x,z)=>[ox+(x+HALF)*S,oy+(z+HALF)*S];
+    for(let cx=-HALF;cx<HALF;cx++)for(let cz=-HALF;cz<HALF;cz++){const t=getTile(cx,cz),tp=topMap[idx(cx,cz)];g.fillStyle=tp>=99?'#2e6a24':(tp>=2&&t!=='hedge')?'#efe8da':(MAPC[t]||'#5aa83a');g.fillRect(ox+(cx+HALF)*S,oy+(cz+HALF)*S,S+0.2,S+0.2);}
+    g.textAlign='center';g.font='700 9px '+FONT_UI;LEGEND.forEach(([n,x,z],i)=>{const [px,py]=at(x,z);g.fillStyle='#1d2a17';g.fillRect(px-6,py-6,12,12);g.fillStyle='#ffffff';g.fillText(String(i+1),px,py+3.5);});
+    const [yx,yy]=at(MX,MZ);g.fillStyle='#e0442e';g.fillRect(yx-4,yy-4,8,8);g.strokeStyle='#ffffff';g.lineWidth=1.5;g.strokeRect(yx-4,yy-4,8,8);
+    g.textAlign='left';g.font='400 10.5px '+FONT_UI;LEGEND.forEach(([n],i)=>{g.fillStyle='#1d2a17';g.fillText((i+1)+'  '+n,192,48+i*10.6);});
+    g.fillStyle='#e0442e';g.fillRect(192,206,8,8);g.fillStyle='#1d2a17';g.font='700 10.5px '+FONT_UI;g.fillText('You are here',204,214);});
+  mapM.position.set(MX,1.5,MZ);mapM.rotation.y=Math.PI;scene.add(mapM);
+
+  // wayfinding, recycling and water refill points along the main paths
+  finger(-3.6,7.6,[[-Math.PI/2,'Orchard'],[Math.PI/2,'Playground'],[Math.PI,'Plaza'],[0,'Lakeside']]);
+  finger(16.8,-40.6,[[Math.PI/2,'Solar Grove'],[-Math.PI/2,'Green Loop'],[0,'Playroom']]);
+  finger(-17.2,-40.6,[[-Math.PI/2,'Garden'],[Math.PI/2,'Green Loop'],[0,'Gym']]);
+  finger(-38.6,11.6,[[Math.PI,'Meadow'],[Math.PI/2,'Plaza'],[0,'Orchard']]);
+  finger(38.9,-11.4,[[0,'Mobility Hub'],[Math.PI,'Solar Grove']]);
+  for(const [x,z] of [[-3.4,-10.6],[11.4,3],[-11.4,3],[3.9,16.6],[13,11.6]])recycle(x,z);
+  refill(17.2,11.6);refill(-13.6,-8.6);
+
+  // solar bollards along the Green Loop
+  for(const [x,z] of [[-36.5,-40.85],[-21.5,-40.85],[-10.5,-40.85],[10.5,-40.85],[22.5,-40.85],[33.5,-40.85],[-38.85,-28],[-38.85,-2],[-38.85,18],[-38.85,30],
+    [-34,40.15],[-12,40.15],[12,40.15],[30,40.15],[39,-33],[39,-17],[39,-4],[39,3.5]])addLamp('bollard',x,z,{zone:'path'});
+
+  // rain garden: ornamental grasses round the plaza edge (no collision)
+  for(let i=0;i<72;i++){const a=i*Math.PI*2/72,r=7.1+((i*13)%5)*0.28,x=Math.sin(a)*r,z=Math.cos(a)*r,cx=Math.floor(x),cz=Math.floor(z);
+    if(getTile(cx,cz)!=='grass'||topMap[idx(cx,cz)]>0||LAMPS.some(l=>Math.hypot(l.x-x,l.z-z)<0.9))continue;fbox(x,0.18,z,0.3,0.36,0.3,i%4?'#7fae4a':'#a7c957');if(i%3===0)fbox(x,0.42,z,0.14,0.1,0.14,'#9c6bd6');}
 }
 
 const BOARD_POS=new THREE.Vector3();
@@ -1383,8 +1569,8 @@ function sfx(name,o){
   switch(name){
     case 'step':{const g=o.ground;
       if(g==='water')hiss(F,t,0.16,{type:'lowpass',f:1300,v:0.09,a:0.02});
-      else if(g==='grass'||g==='hedge'||g==='carpet'||g==='rubber')hiss(F,t,0.06,{type:'lowpass',f:900,v:0.07});
-      else if(g==='sand')hiss(F,t,0.08,{type:'lowpass',f:1800,v:0.05});
+      else if(g==='grass'||g==='meadow'||g==='hedge'||g==='carpet'||g==='rubber')hiss(F,t,0.06,{type:'lowpass',f:900,v:0.07});
+      else if(g==='sand'||g==='trail')hiss(F,t,0.08,{type:'lowpass',f:1800,v:0.05});
       else if(g==='oak'||g==='plank'||g==='dock'){tone(F,rand(150,190),t,0.05,{type:'triangle',v:0.06});hiss(F,t,0.03,{type:'bandpass',f:1200,v:0.03});}
       else if(g==='tile'||g==='pantry')hiss(F,t,0.035,{type:'highpass',f:2400,v:0.05});
       else hiss(F,t,0.045,{type:'bandpass',f:1700,v:0.05});break;}
@@ -2561,7 +2747,7 @@ function updateLabels(){
    ========================================================= */
 const mm=$('#minimap'),mmg=mm.getContext('2d');const MM=168,MS=MM/N;
 const mmBase=(()=>{const c=document.createElement('canvas');c.width=c.height=MM;const g=c.getContext('2d');
-  const C={grass:'#4f9a33',path:'#9b958c',plaza:'#b3ada3',oak:'#c8a36b',pantry:'#d9cfa9',tile:'#dfe8ec',sand:'#e3d29a',water:'#3b8fd6',dock:'#a8793f',hedge:'#24561c',carpet:'#5a3470',rubber:'#3a3d44',court:'#2f6fa8',court2:'#3f9a5a',turf:'#3d6b35'};
+  const C={grass:'#4f9a33',path:'#9b958c',plaza:'#b3ada3',oak:'#c8a36b',pantry:'#d9cfa9',tile:'#dfe8ec',sand:'#e3d29a',water:'#3b8fd6',dock:'#a8793f',hedge:'#24561c',carpet:'#5a3470',rubber:'#3a3d44',court:'#2f6fa8',court2:'#3f9a5a',turf:'#3d6b35',trail:'#c9a877',paver:'#a3ae95',meadow:'#6aa84a',plank:'#a8793f'};
   for(let cx=-HALF;cx<HALF;cx++)for(let cz=-HALF;cz<HALF;cz++){const t=getTile(cx,cz),tp=topMap[idx(cx,cz)];g.fillStyle=tp>=99?'#2e6a24':(tp>=2&&t!=='hedge')?'#efe8da':(C[t]||'#4f9a33');g.fillRect((cx+HALF)*MS,(cz+HALF)*MS,Math.ceil(MS),Math.ceil(MS));}
   return c;})();
 const toMM=(x,z)=>[(x+HALF)*MS,(z+HALF)*MS];
@@ -2578,6 +2764,9 @@ function zoneAt(x,z){
   if(x*x+z*z<56)return 'Plaza';
   if(lakeE(x,z)<1.7||(z>13&&Math.abs(x)<22))return 'Lakeside';
   const t=getTile(Math.floor(x),Math.floor(z));
+  const E=ECO_AREAS.find(a=>x>=a.x0&&x<a.x1&&z>=a.z0&&z<a.z1);if(E)return E.name;
+  if(t==='trail')return 'Green Loop';
+  if(t==='path'&&x<-3&&z>8&&z<11.5)return 'Meadow Walk';
   if(t==='path'){if(z<-4)return 'Path to Work Desks';if(x>4)return 'Path to Pantry';if(x<-4)return 'Path to Restroom';return 'Path to Lakeside';}
   return 'Office grounds';
 }
@@ -3317,6 +3506,7 @@ function frame(now){
   for(const S of DESK_SLOTS)if(S.desk)animateDesk(S.desk,now/1000,dt);
   waterTex.offset.x+=dt*0.015;waterTex.offset.y+=dt*0.008;
   for(const c of clouds){c.position.x+=c.userData.v*dt;if(c.position.x>100)c.position.x=-100;}
+  if(!reduceMotion)for(const r of ECO_SPIN)r.rotation.x+=dt*r.userData.w;
   for(const d of ducks){const u=d.userData;u.a+=dt*u.s;d.position.set(u.cx+Math.sin(u.a)*u.r,-0.2+Math.sin(u.a*6)*0.02,u.cz+Math.cos(u.a)*u.r*0.6);d.rotation.y=u.a+Math.PI/2;}
   if(state.selected){const s=state.selected,p=s.root.position;
     const gy=s.anim.pose==='sit'?0:(s.kind==='me'?supportY(p.x,p.z):p.y-s.hopY);
