@@ -103,12 +103,21 @@ const AV={
   topColor:['#e0442e','#f2b632','#4f9a33','#2f6fc2','#6d4bb5','#2fa5a0','#ef7f2a','#e8e2d0','#3a3a44','#c9467e'],
   pants:['#2d3d63','#1f1f24','#b89a6a','#6b6b74','#5b3a1e','#55663a'],
   shoes:['#1f1f24','#f4f1ea','#7a4a26','#c23a2b','#2f6fc2'],
-  acc:['None','Glasses','Shades','Headphones','Cap','Beanie']
+  acc:['None','Glasses','Shades','Headphones','Cap','Beanie'],
+  gender:['Any','Female','Male']// index 0 (Any) is what older profiles get
 };
-const AV_KEYS=['skin','hairStyle','hair','eyes','top','topColor','pants','shoes','acc'];
-const AV_LABEL={skin:'Skin',hairStyle:'Hair style',hair:'Hair colour',eyes:'Eyes',top:'Top',topColor:'Top colour',pants:'Trousers',shoes:'Shoes',acc:'Accessory'};
+const AV_KEYS=['skin','hairStyle','hair','eyes','top','topColor','pants','shoes','acc','gender'];// append only: the cookie stores these in order
+const AV_LABEL={skin:'Skin',hairStyle:'Hair style',hair:'Hair colour',eyes:'Eyes',top:'Top',topColor:'Top colour',pants:'Trousers',shoes:'Shoes',acc:'Accessory',gender:'Gender'};
 const AV_STYLE=new Set(['hairStyle','top','acc']);
-function randomAvatar(){const a={};for(const k of AV_KEYS)a[k]=Math.floor(Math.random()*AV[k].length);if(Math.random()<0.45)a.acc=0;return a;}
+const GENDER_ORDER=[1,2,0];// shown as Female, Male, Any
+// weights per option for a gender (missing keys stay uniform); Any keeps the old fully random mix
+const AV_BIAS={
+  1:{hairStyle:[3,0.6,2,6,5,4,0.2],hair:[1,1,1,1,1.2,0.6,0.7,0.4],top:[3,2,0.4,2,3],topColor:[1.2,1,0.8,1,1.3,1.2,1,1,0.7,1.4],acc:[5,2,2,1.2,0.6,1.4]},
+  2:{hairStyle:[6,4,4,0.5,0.2,3,1.5],hair:[1.2,1.2,1,1,0.6,0.8,0.1,0.3],top:[3,3,2,2,2],topColor:[1,0.8,1.2,1.3,0.7,1,0.8,1,1.3,0.4],acc:[5,2,2,1,2,1]}
+};
+const pickW=w=>{let t=w.reduce((a,b)=>a+b,0)*Math.random();for(let i=0;i<w.length;i++){t-=w[i];if(t<0)return i;}return w.length-1;};
+function randomAvatar(gender){const g=clamp(gender|0,0,AV.gender.length-1),B=AV_BIAS[g]||{},a={};
+  for(const k of AV_KEYS)a[k]=B[k]?pickW(B[k]):Math.floor(Math.random()*AV[k].length);if(!B.acc&&Math.random()<0.45)a.acc=0;a.gender=g;return a;}
 const avatarToArr=a=>AV_KEYS.map(k=>a[k]|0);
 const arrToAvatar=arr=>{const a={};AV_KEYS.forEach((k,i)=>{a[k]=clamp((arr&&arr[i])|0,0,AV[k].length-1);});return a;};
 
@@ -131,6 +140,8 @@ const DESK_DEFAULT={desk:0,chairStyle:0,chair:0,tech:0,screen:0,plant:0,pet:0,de
 const deskToArr=d=>[...DK_KEYS.map(k=>d[k]|0),(d.decor||[]).reduce((m,i)=>m|(1<<i),0)];
 const arrToDesk=arr=>{const d={};DK_KEYS.forEach((k,i)=>{d[k]=clamp((arr&&arr[i])|0,0,DK[k].length-1);});const bits=(arr&&arr[DK_KEYS.length])|0;d.decor=DK.decor.map((_,i)=>i).filter(i=>bits&(1<<i)).slice(0,DECOR_MAX);return d;};
 const deskOf=rec=>arrToDesk(deskToArr(Object.assign({},DESK_DEFAULT,rec&&rec.desk)));
+function randomDesk(){const d={};for(const k of DK_KEYS)d[k]=Math.floor(Math.random()*DK[k].length);const pool=DK.decor.map((_,i)=>i);d.decor=[];
+  for(let n=Math.floor(Math.random()*(DECOR_MAX+1));n>0;n--)d.decor.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);return d;}
 
 /* =========================================================
    Data model
@@ -1217,7 +1228,7 @@ function applyNet(geo,n){const uv=geo.attributes.uv;const order=['left','right',
     uv.setXY(f*4,u0,vt);uv.setXY(f*4+1,u1,vt);uv.setXY(f*4+2,u0,vb);uv.setXY(f*4+3,u1,vb);}uv.needsUpdate=true;}
 function paintSkin(av){
   const c=document.createElement('canvas');c.width=64;c.height=64;const g=c.getContext('2d');
-  const R=mulberry32(hashStr(avatarToArr(av).join('.'))+11);
+  const R=mulberry32(hashStr(avatarToArr(av).slice(0,9).join('.'))+11);
   const P=(x,y,col)=>{g.fillStyle=col;g.fillRect(x,y,1,1);};
   const Nz=(col,n)=>shade(col,(R()-.5)*2*n);
   const F=(r,col,n)=>{n=n==null?0.05:n;for(let j=0;j<r[3];j++)for(let i=0;i<r[2];i++)P(r[0]+i,r[1]+j,Nz(col,n));};
@@ -1241,6 +1252,7 @@ function paintSkin(av){
   at(fr,1,4,'#f6f3ec');at(fr,2,4,eye);at(fr,5,4,eye);at(fr,6,4,'#f6f3ec');
   at(fr,3,5,shade(skin,-0.07));at(fr,4,5,shade(skin,-0.07));
   at(fr,3,6,shade(skin,-0.3));at(fr,4,6,shade(skin,-0.3));
+  if(AV.gender[av.gender]==='Female'){at(fr,3,6,'#b5545c');at(fr,4,6,'#b5545c');if(acc!=='Glasses'&&acc!=='Shades'&&hs!=='Long'){at(fr,0,4,'#1c1410');at(fr,7,4,'#1c1410');}}// lips and lashes
   if(acc==='Glasses'){const k='#2a2320';for(const i of [0,3,4,7])at(fr,i,4,k);for(const i of [1,2,5,6])at(fr,i,3,k);at(H.left,0,4,k);at(H.right,7,4,k);}
   if(acc==='Shades'){const k='#141414';for(let i=0;i<8;i++)at(fr,i,4,k);for(const i of [1,2,5,6])at(fr,i,3,k);at(fr,2,4,'#45454c');at(fr,6,4,'#45454c');at(H.left,0,4,k);at(H.right,7,4,k);}
   // overlay layer (hair volume, headwear)
@@ -3346,7 +3358,7 @@ $('#roomLeave').addEventListener('click',()=>{if(room.mode)leaveRoom();state.sol
 const avControls=$('#avControls');
 function openSetup(mode,email){
   const editing=mode==='edit';const me=state.me;
-  state.setup={mode,email:editing?me.email:email,av:editing?Object.assign({},me.avatar):randomAvatar(),desk:editing?deskOf(me):deskOf(null),returnTo:state.mode};
+  state.setup={mode,email:editing?me.email:email,av:editing?Object.assign({},me.avatar):randomAvatar(),desk:editing?deskOf(me):deskOf(null),returnTo:state.mode,avTouched:editing};
   if(state.selected)closeCard();if(state.modal)closeModal();
   state.mode='setup';applyViewOffset();
   $('#screen-login').hidden=true;$('#hud').hidden=true;$('#screen-setup').hidden=false;
@@ -3358,7 +3370,7 @@ function openSetup(mode,email){
   // the spot is assigned automatically (allocDesk on a throwaway record only previews it); the options default to DESK_DEFAULT
   const spot=editing?deskLabel(me):deskLabel({deskSlot:allocDesk({email,deskSlot:-1})});
   $('#deskNote').innerHTML='Only you can sit at your desk. Leave these alone to get the default desk. '+(spot?'Your spot: <b>'+esc(spot)+'</b>, assigned automatically.':'All '+DESK_SLOTS.length+' desks are taken right now.');
-  buildAvControls();buildDkControls();updatePreview();updateDeskPreview();setPvView('avatar');updatePvTag();
+  buildAvControls();buildDkControls();updatePreview();updateDeskPreview();setTab('profile');updatePvTag();
   setTimeout(()=>$('#pName').focus(),30);
 }
 const dkControls=$('#dkControls');
@@ -3375,24 +3387,42 @@ function buildDkControls(){
   dkControls.querySelectorAll('[data-decor]').forEach(b=>b.addEventListener('click',()=>{const i=+b.dataset.decor;dk.decor=dk.decor.includes(i)?dk.decor.filter(x=>x!==i):dk.decor.concat(i).slice(0,DECOR_MAX);
     buildDkControls();changed();const f=$('[data-decor="'+i+'"]',dkControls);if(f)f.focus();}));
 }
-$('#pvAvatar').addEventListener('click',()=>setPvView('avatar'));$('#pvDesk').addEventListener('click',()=>setPvView('desk'));
+// tabs: Profile and Character show the avatar preview, Desk shows the desk; arrow keys, Home and End move between tabs
+const SETUP_TABS=['profile','avatar','desk'],tabEl=t=>$('#tab'+t[0].toUpperCase()+t.slice(1)),panelEl=t=>$('#panel'+t[0].toUpperCase()+t.slice(1));
+function setTab(t,focus){
+  for(const x of SETUP_TABS){const on=x===t,b=tabEl(x);b.setAttribute('aria-selected',String(on));b.setAttribute('tabindex',on?'0':'-1');panelEl(x).hidden=!on;}
+  if(state.setup)state.setup.tab=t;setPvView(t==='desk'?'desk':'avatar');if(focus)tabEl(t).focus();
+}
+SETUP_TABS.forEach((t,i)=>{const b=tabEl(t);b.addEventListener('click',()=>setTab(t));
+  b.addEventListener('keydown',e=>{const n=SETUP_TABS.length,j={ArrowRight:i+1,ArrowLeft:i-1,Home:0,End:n-1}[e.key];if(j==null)return;e.preventDefault();setTab(SETUP_TABS[(j+n)%n],true);});});
+function buildGender(){
+  const g=state.setup.av.gender|0;
+  $('#genderRow').innerHTML=GENDER_ORDER.map(i=>'<button type="button" class="chip-btn g" role="radio" aria-checked="'+(g===i)+'" aria-pressed="'+(g===i)+'" data-gender="'+i+'">'+esc(AV.gender[i])+'</button>').join('');
+  $('#genderNote').textContent=g?'Randomise picks hair, clothes and accessories that suit '+AV.gender[g].toLowerCase()+' characters.':'Randomise mixes every style.';
+  $('#genderRow').querySelectorAll('[data-gender]').forEach(b=>b.addEventListener('click',()=>pickGender(+b.dataset.gender)));
+}
+// choosing a gender re-rolls the look until you start customising it; after that it keeps your choices
+function pickGender(g){const s=state.setup;if(!s)return;if(s.avTouched){s.av.gender=g;buildGender();updatePreview();}else rollAvatar(g);}
+function rollAvatar(g){state.setup.av=randomAvatar(g==null?state.setup.av.gender:g);buildAvControls();updatePreview();pv.spin=Math.PI*2;}
 function buildAvControls(){
-  const av=state.setup.av;
-  avControls.innerHTML=AV_KEYS.map(k=>{
+  const av=state.setup.av;buildGender();
+  avControls.innerHTML=AV_KEYS.filter(k=>k!=='gender').map(k=>{
     if(AV_STYLE.has(k))return '<div class="av-row"><span class="lbl" id="l-'+k+'">'+AV_LABEL[k]+'</span><div class="stepper" role="group" aria-labelledby="l-'+k+'"><button type="button" class="btn" data-step="'+k+'" data-d="-1" aria-label="Previous '+AV_LABEL[k].toLowerCase()+'">‹</button><output id="o-'+k+'">'+esc(AV[k][av[k]])+'</output><button type="button" class="btn" data-step="'+k+'" data-d="1" aria-label="Next '+AV_LABEL[k].toLowerCase()+'">›</button></div></div>';
     return '<div class="av-row"><span class="lbl" id="l-'+k+'">'+AV_LABEL[k]+'</span><div class="swatches" role="radiogroup" aria-labelledby="l-'+k+'">'+AV[k].map((c,i)=>'<button type="button" class="sw" role="radio" aria-checked="'+(av[k]===i)+'" aria-label="'+AV_LABEL[k]+' '+(i+1)+'" data-sw="'+k+'" data-i="'+i+'" style="background:'+c+'"></button>').join('')+'</div></div>';
   }).join('');
-  avControls.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.step,n=AV[k].length;av[k]=(av[k]+(+b.dataset.d)+n)%n;$('#o-'+k).textContent=AV[k][av[k]];updatePreview();}));
-  avControls.querySelectorAll('[data-sw]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.sw;av[k]=+b.dataset.i;avControls.querySelectorAll('[data-sw="'+k+'"]').forEach(x=>x.setAttribute('aria-checked',String(x===b)));updatePreview();}));
+  avControls.querySelectorAll('[data-step]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.step,n=AV[k].length;av[k]=(av[k]+(+b.dataset.d)+n)%n;$('#o-'+k).textContent=AV[k][av[k]];state.setup.avTouched=true;updatePreview();}));
+  avControls.querySelectorAll('[data-sw]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.sw;av[k]=+b.dataset.i;avControls.querySelectorAll('[data-sw="'+k+'"]').forEach(x=>x.setAttribute('aria-checked',String(x===b)));state.setup.avTouched=true;updatePreview();}));
 }
-$('#randomBtn').addEventListener('click',()=>{state.setup.av=randomAvatar();buildAvControls();updatePreview();pv.spin=Math.PI*2;});
+$('#randomBtn').addEventListener('click',()=>rollAvatar());
+$('#randomDeskBtn').addEventListener('click',()=>{state.setup.desk=randomDesk();buildDkControls();updateDeskPreview();pv.spin=Math.PI*2;});
+$('#resetDeskBtn').addEventListener('click',()=>{state.setup.desk=deskOf(null);buildDkControls();updateDeskPreview();});
 function updatePvTag(){const nm=$('#pName').value.trim()||'Your name';const st=STATUS[$('#pStatus').value]||STATUS.available;$('#pvTag').innerHTML='<i class="dot" style="background:var('+st.v+')"></i><span>'+esc(nm)+'</span>';}
 $('#pName').addEventListener('input',()=>{$('#pNameErr').textContent='';updatePvTag();});$('#pStatus').addEventListener('change',updatePvTag);
 $('#setupBack').addEventListener('click',()=>{const s=state.setup;state.setup=null;if(s&&s.mode==='edit'&&state.me){$('#screen-setup').hidden=true;resumeWorld();}else showLogin();});
 $('#setupForm').addEventListener('submit',e=>{
   e.preventDefault();const s=state.setup;if(!s)return;
   const name=$('#pName').value.trim().replace(/\s+/g,' ');
-  if(name.length<2){$('#pNameErr').textContent='Add a display name with at least 2 characters.';$('#pName').focus();return;}
+  if(name.length<2){$('#pNameErr').textContent='Add a display name with at least 2 characters.';setTab('profile');$('#pName').focus();return;}
   const role=$('#pRole').value.trim(),team=$('#pTeam').value.trim(),status=$('#pStatus').value;
   if(s.mode==='create'){
     if(room.mode==='guest'){$('#setupErr').textContent='Joining the room…';if(!roomSend({t:'create',email:s.email,profile:{name,role,team,status,avatar:s.av,desk:s.desk}}))$('#setupErr').textContent='Not connected to the room. Check your Wi-Fi and try again.';return;}
@@ -3444,8 +3474,6 @@ function placePvAvatar(){
 }
 function setPvView(v){
   ensurePreview();if(pv.view!==v)pv.rot=v==='desk'?0.95:0.5;pv.view=v;
-  $('#pvAvatar').setAttribute('aria-pressed',String(v==='avatar'));$('#pvDesk').setAttribute('aria-pressed',String(v==='desk'));
-  $('#randomBtn').hidden=v==='desk';
   $('#pvHint').textContent=v==='desk'?'Drag to turn · Only you can sit at this desk':'Drag to turn · Your character is 32 skin pixels tall';
   if(v==='desk'){pv.camera.position.set(0,2.5,5.6);pv.camera.lookAt(0,0.75,0.35);}else{pv.camera.position.set(0,1.35,5.2);pv.camera.lookAt(0,0.92,0);}
   placePvAvatar();

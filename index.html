@@ -87,13 +87,6 @@
       <div class="setup">
         <div class="setup-preview panel">
           <div id="previewMount" aria-label="Avatar and desk preview. Drag to turn."></div>
-          <div class="pv-top">
-            <div class="pv-tabs" role="group" aria-label="Preview">
-              <button class="chip-btn g" id="pvAvatar" type="button" aria-pressed="true">Avatar</button>
-              <button class="chip-btn g" id="pvDesk" type="button" aria-pressed="false">Desk</button>
-            </div>
-            <button class="btn btn-gold" id="randomBtn" type="button">Randomise avatar</button>
-          </div>
           <div class="pv-bottom">
             <span class="tag pv-tag" id="pvTag"><i class="dot" style="background:var(--st-available)"></i><span>Your name</span></span>
             <span class="pv-hint" id="pvHint">Drag to turn · Your character is 32 skin pixels tall</span>
@@ -105,8 +98,13 @@
             <h2 id="setupTitle">Set up your profile</h2>
             <p class="fine" id="setupSub">Creating a profile for <b id="setupEmail"></b></p>
           </div>
-          <fieldset>
-            <legend>Profile</legend>
+          <div class="setup-tabs" role="tablist" aria-label="Profile sections">
+            <button type="button" role="tab" id="tabProfile" aria-controls="panelProfile" aria-selected="true">Profile</button>
+            <button type="button" role="tab" id="tabAvatar" aria-controls="panelAvatar" aria-selected="false" tabindex="-1">Character</button>
+            <button type="button" role="tab" id="tabDesk" aria-controls="panelDesk" aria-selected="false" tabindex="-1">Desk</button>
+          </div>
+          <fieldset id="panelProfile" role="tabpanel" aria-labelledby="tabProfile">
+            <legend class="sr-only">Profile</legend>
             <div class="field">
               <label for="pName">Display name</label>
               <input id="pName" type="text" maxlength="24" autocomplete="nickname" placeholder="How coworkers see you">
@@ -133,13 +131,25 @@
               </select>
             </div>
           </fieldset>
-          <fieldset>
-            <legend>Avatar</legend>
+          <fieldset id="panelAvatar" role="tabpanel" aria-labelledby="tabAvatar" hidden>
+            <legend class="sr-only">Character</legend>
+            <div class="tab-actions">
+              <div class="av-row">
+                <span class="lbl" id="l-gender">Gender</span>
+                <div class="chip-row" role="radiogroup" aria-labelledby="l-gender" id="genderRow"></div>
+              </div>
+              <button class="btn btn-gold" id="randomBtn" type="button">Randomise character</button>
+              <p class="fine" id="genderNote"></p>
+            </div>
             <div id="avControls" style="display:grid;gap:10px"></div>
           </fieldset>
-          <fieldset>
-            <legend>Your desk</legend>
+          <fieldset id="panelDesk" role="tabpanel" aria-labelledby="tabDesk" hidden>
+            <legend class="sr-only">Your desk</legend>
             <p class="fine" id="deskNote"></p>
+            <div class="tab-actions">
+              <button class="btn btn-gold" id="randomDeskBtn" type="button">Randomise desk</button>
+              <button class="btn" id="resetDeskBtn" type="button">Default desk</button>
+            </div>
             <div id="dkControls" style="display:grid;gap:10px"></div>
           </fieldset>
           <p class="err" id="setupErr" role="alert"></p>

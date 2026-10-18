@@ -149,6 +149,26 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(G.state.mode === 'world' && G.state.me.desk.pet === 1 && G.state.me.desk.tech === 1 && G.state.me.desk.decor.length === 2, 'desk changes are saved (cat, two monitors, two decor items)');
   ok(G.state.me.deskSlot === testerSlot && !!mySlot.desk && mySlot.spot.owner === 'tester@example.com', 'your desk is rebuilt in the same spot, still yours');
 
+  console.log('Profile tabs, gender and randomise');
+  G.openSetup('edit'); const savedDesk = JSON.parse(JSON.stringify(G.state.setup.desk));
+  ok(!getEl('#panelProfile').hidden && getEl('#panelAvatar').hidden && getEl('#panelDesk').hidden && getEl('#tabProfile').getAttribute('aria-selected') === 'true', 'the setup opens on the Profile tab, with Character and Desk hidden');
+  G.setTab('desk'); ok(getEl('#panelProfile').hidden && !getEl('#panelDesk').hidden && G.pv.view === 'desk' && getEl('#tabDesk').getAttribute('tabindex') === '0', 'the Desk tab shows the desk fields and the desk preview');
+  G.setTab('avatar'); ok(!getEl('#panelAvatar').hidden && G.pv.view === 'avatar', 'the Character tab shows the character fields and the avatar preview');
+  const share = (g, k, set) => { let n = 0; for (let i = 0; i < 600; i++) if (set.includes(G.randomAvatar(g)[k])) n++; return n / 600; };
+  const LONG = [3, 4], SHORT = [0, 1, 6];// Long + Bun; Short, Buzz, Bald
+  ok(share(1, 'hairStyle', LONG) > 0.4 && share(2, 'hairStyle', LONG) < 0.1 && share(2, 'hairStyle', SHORT) > 0.55 && share(1, 'hairStyle', SHORT) < 0.25, 'randomise follows the gender: mostly long hair and buns for Female, short cuts for Male');
+  ok([0, 1, 2].every(g => { for (let i = 0; i < 200; i++) { const a = G.randomAvatar(g); if (a.gender !== g || Object.keys(a).some(k => a[k] < 0 || a[k] >= G.AV[k].length)) return false; } return true; }), 'every randomised character keeps its gender and valid options');
+  const old9 = G.arrToAvatar([1, 2, 3, 1, 2, 3, 1, 2, 1]);
+  ok(old9.gender === 0 && G.avatarToArr(old9).length === 10, 'older profiles (9 numbers in the cookie) load with gender Any');
+  getEl('#randomBtn').dispatch('click'); ok(G.state.setup.av.gender === G.state.me.avatar.gender, 'Randomise character keeps the chosen gender');
+  let deskOk = true, decorSeen = new Set();
+  for (let i = 0; i < 300; i++) { const d = G.randomDesk(); if (G.DK_KEYS.some(k => d[k] < 0 || d[k] >= G.DK[k].length) || d.decor.length > 2 || new Set(d.decor).size !== d.decor.length) deskOk = false; d.decor.forEach(x => decorSeen.add(x)); G.buildDesk(d); }
+  ok(deskOk && decorSeen.size === G.DK.decor.length, 'Randomise desk gives valid desks (up to 2 different decor items) that all build');
+  getEl('#randomDeskBtn').dispatch('click'); const rd = G.state.setup.desk; getEl('#resetDeskBtn').dispatch('click');
+  ok(G.DK_KEYS.every(k => G.state.setup.desk[k] === 0) && G.state.setup.desk.decor.length === 0 && !!rd, 'Default desk resets every desk option');
+  G.state.setup.av = G.randomAvatar(1); G.state.setup.desk = savedDesk; getEl('#setupForm').dispatch('submit');
+  ok(G.state.mode === 'world' && G.state.me.avatar.gender === 1 && JSON.parse(store.ga_users)[G.state.me.email].avatar.gender === 1, 'saving keeps the gender');
+
   console.log('Pantry food counter');
   const nCat = c => G.FOODS.filter(x => x.cat === c).length;
   ok(['veg', 'nonveg', 'fruit', 'drink'].every(c => nCat(c) >= 6), 'at least 6 veg, non-veg, fruit and drink items (' + G.FOODS.length + ' foods)');
@@ -558,7 +578,7 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   for (const k of Object.keys(store)) delete store[k];
   const rec = G.findUser('tester@example.com');
   ok(!!rec && rec.name === 'Test User', 'profile can be rebuilt from its cookie alone');
-  ok(rec.deskSlot === testerSlot && rec.desk.pet === 1 && rec.desk.decor.length === 2, 'desk spot and desk choices are rebuilt from the cookie too');
+  ok(rec.deskSlot === testerSlot && rec.desk.pet === 1 && rec.desk.decor.length === 2 && rec.avatar.gender === 1, 'desk spot, desk choices and gender are rebuilt from the cookie too');
 
   await new Promise(r => setTimeout(r, 300));
   done();
