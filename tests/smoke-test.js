@@ -580,6 +580,25 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(!!rec && rec.name === 'Test User', 'profile can be rebuilt from its cookie alone');
   ok(rec.deskSlot === testerSlot && rec.desk.pet === 1 && rec.desk.decor.length === 2 && rec.avatar.gender === 1, 'desk spot, desk choices and gender are rebuilt from the cookie too');
 
+  console.log('Touch controls (a phone held sideways)');
+  const t = H.createClient({ coarse: true }); t.boot(); const T = t.G;
+  t.getEl('#soloBtn').dispatch('click'); t.getEl('#email').value = 'thumb@example.com'; t.getEl('#loginForm').dispatch('submit');
+  t.getEl('#pName').value = 'Thumb'; t.getEl('#setupForm').dispatch('submit'); t.frames(5, 16);
+  const TP = T.state.player, mz = t.getEl('#moveZone'), tz0 = TP.root.position.z;
+  ok(T.state.mode === 'world' && !t.getEl('#touch').hidden, 'phones and tablets get the touch controls');
+  mz.dispatch('pointerdown', { pointerId: 3, clientX: 150, clientY: 300 }); mz.dispatch('pointermove', { pointerId: 3, clientX: 150, clientY: 260 });
+  ok(T.joy.y < -0.7 && !T.joy.run, 'the stick appears where the left thumb lands; pushing up walks forward');
+  t.frames(30, 16); ok(TP.root.position.z < tz0 - 0.5, 'and you walk');
+  mz.dispatch('pointermove', { pointerId: 3, clientX: 150, clientY: 200 }); ok(T.joy.run, 'pushing past the ring runs');
+  mz.dispatch('pointerup', { pointerId: 3, clientX: 150, clientY: 200 }); ok(T.joy.x === 0 && T.joy.y === 0 && !T.joy.run && T.joy.active === false, 'letting go stops you');
+  const tBench = T.SPOTS.find(s => s.pose === 'sit' && s.zone === 'plaza' && !s.desk);
+  TP.root.position.set(tBench.approach.x, 0, tBench.approach.z); t.frames(30, 16);
+  ok(T.useVerb() === 'Sit' && t.getEl('#tUseV').textContent === 'Sit', 'the Use button names what it will do (Sit by a bench)');
+  t.getEl('#tUse').dispatch('click'); t.frames(30, 16); ok(!!TP.seat && t.getEl('#tUseV').textContent === 'Stand', 'tapping it sits you down, and it now says Stand');
+  t.getEl('#tUse').dispatch('click'); TP.hold(T.FOODS[0].id); t.frames(30, 16);
+  ok(!t.getEl('#tDrop').hidden && t.getEl('#tDrop').textContent === 'Drop' && !t.getEl('#tEat').hidden, 'holding food shows Eat and Drop');
+  t.getEl('#tDrop').dispatch('click'); t.frames(30, 16); ok(!TP.held && t.getEl('#tDrop').hidden, 'Drop puts it down (same as Q)');
+
   await new Promise(r => setTimeout(r, 300));
   done();
 })().catch(e => { console.log('RUNTIME ERROR', e.stack); process.exit(1); });

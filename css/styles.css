@@ -176,7 +176,7 @@ legend{padding:0 0 4px;font-family:var(--f-body);font-size:15px;font-weight:700;
 
 /* ---------- HUD ---------- */
 #hud{position:absolute;inset:0;pointer-events:none}
-#hud .panel,#hud .btn,#hud .joy{pointer-events:auto}
+#hud .panel,#hud .btn{pointer-events:auto}
 .hud-tl{position:absolute;top:12px;left:max(16px,env(safe-area-inset-left,0px));width:min(290px,calc(100% - 32px));display:grid;gap:8px}
 .me{padding:12px;display:grid;gap:10px}
 .me-row{display:flex;gap:10px;align-items:center;min-width:0}
@@ -294,13 +294,90 @@ legend{padding:0 0 4px;font-family:var(--f-body);font-size:15px;font-weight:700;
 @keyframes tin{from{transform:translateY(-12px);opacity:0}}
 @keyframes tout{to{transform:translateY(-12px);opacity:0}}
 
-/* touch */
-#touch{position:absolute;inset:auto 0 16px 0;height:130px;pointer-events:none}
-.joy{position:absolute;left:max(16px,env(safe-area-inset-left,0px));bottom:0;width:124px;height:124px;border-radius:50%;background:rgba(17,11,7,.45);border:2px solid rgba(246,236,214,.25);touch-action:none}
-.knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;background:var(--bark-2);border:2px solid var(--bark-lo);box-shadow:inset 2px 2px 0 var(--bark-hi);border-radius:50%}
-.tbtns{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:6px;display:flex;gap:10px;align-items:flex-end}
-.tbtns .btn{width:68px;height:68px;padding:0;font-size:14px}
-.tbtns .btn[aria-pressed=true]{background:var(--apple);color:#fff}
+/* touch (phones and tablets, html.touch-ui): Minecraft-style. The left thumb walks with a stick that appears where it lands
+   (push past the ring to run), the right side drags to look and pinches to zoom, and the action buttons sit bottom right. */
+#touch{position:absolute;inset:0;pointer-events:none;z-index:2}
+.move-zone{position:absolute;left:0;bottom:0;width:42%;height:64%;pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none}
+.joy{position:absolute;left:max(28px,calc(env(safe-area-inset-left,0px) + 12px));bottom:max(24px,env(safe-area-inset-bottom,0px));width:128px;height:128px;border-radius:50%;background:rgba(17,11,7,.38);border:2px solid rgba(246,236,214,.28);pointer-events:none;opacity:.5;transition:opacity .15s,border-color .15s,box-shadow .15s}
+.joy.on{opacity:1;transform:translate(-50%,-50%)}
+.joy.run{border-color:var(--gold);box-shadow:0 0 0 4px rgba(242,182,50,.3)}
+.knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;background:var(--bark-2);border:2px solid var(--bark-lo);box-shadow:inset 2px 2px 0 var(--bark-hi);border-radius:50%}
+.joy.run .knob{background:var(--gold);border-color:var(--gold-deep)}
+.joy-run{position:absolute;left:50%;top:-24px;transform:translateX(-50%);font-family:var(--f-body);font-size:13px;font-weight:700;color:var(--gold);opacity:0;text-shadow:0 1px 0 #000}
+.joy.run .joy-run{opacity:1}
+.tbtns{position:absolute;right:max(20px,calc(env(safe-area-inset-right,0px) + 8px));bottom:max(18px,env(safe-area-inset-bottom,0px));width:190px;height:178px;pointer-events:none}
+.tbtns .btn{position:absolute;padding:0;pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;opacity:.94;flex-direction:column;gap:3px}
+.tbtns .btn:active{transform:translateY(2px)}
+.tb-jump{right:0;bottom:0;width:84px;height:84px;font-size:17px}
+.tb-use{right:96px;bottom:6px;width:76px;height:76px}
+.tb-use b{font-size:16px;line-height:1}.tb-use small{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.tb-use.idle{opacity:.55}.tb-use.idle small{display:none}
+.tb-eat{right:12px;bottom:98px;width:62px;height:62px;font-size:14px}
+.tb-drop{right:104px;bottom:96px;width:60px;height:60px;font-size:13px}
+.touch-ui .prompt{bottom:max(18px,env(safe-area-inset-bottom,0px));max-width:max(220px,calc(100% - 470px));white-space:normal;text-align:center;line-height:1.35;font-size:13px}
+.touch-ui .hint{bottom:auto;top:36%;padding-right:40px;max-width:min(520px,calc(100% - 40px));font-size:12px}
+.touch-ui .hud-tl,.touch-ui .hud-tr,.touch-ui .catch,.touch-ui #card{z-index:3}
+.touch-ui #hud.card-open #touch,.touch-ui #hud.card-open .prompt{display:none}
+.more-btn{display:none}
+/* phones (html.phone-ui): the HUD starts small; tap your panel, the map or the menu button to see more */
+.phone-ui .hud-tl{top:8px;left:max(8px,env(safe-area-inset-left,0px));width:auto;gap:6px;align-content:start;justify-items:start}
+.phone-ui .hud-tr{top:8px;right:max(8px,env(safe-area-inset-right,0px));width:96px;transition:width .15s}
+.phone-ui .hud-tr.open{width:min(236px,calc(100dvh - 24px))}
+.phone-ui .feed{display:none}
+.phone-ui .map{padding:4px;gap:3px;cursor:pointer}
+.phone-ui .map-zone{font-size:11px;line-height:1.15}
+.phone-ui .hud-tr.open .map-zone{font-size:13px}
+.phone-ui .me{width:190px;padding:6px 8px;gap:6px;cursor:pointer}
+.phone-ui .me.open{width:286px;padding:10px;gap:9px;max-height:calc(100dvh - 72px);overflow-y:auto}
+.phone-ui .me:not(.open) .stat,.phone-ui .me:not(.open) .me-sub,.phone-ui .me:not(.open) .vact,.phone-ui .me:not(.open) .vital .lbl,.phone-ui .me:not(.open) .vital .num,.phone-ui .me:not(.open) .gold-chip{display:none}
+.phone-ui .me:not(.open) .vitals{padding-top:5px;gap:3px}
+.phone-ui .me:not(.open) .vital{grid-template-columns:12px minmax(0,1fr);gap:5px}
+.phone-ui .me:not(.open) .vital img{width:12px;height:12px}
+.phone-ui .me:not(.open) .vital .bar{height:6px}
+.phone-ui .me:not(.open) .vwarn{font-size:11px}
+.phone-ui .me:not(.open) .head{width:28px;height:28px}
+.phone-ui .me:not(.open) .me-name{font-size:14px}
+.me-mini,.me-chev{display:none}
+.phone-ui .me-mini{display:inline-flex;align-items:center;gap:3px;margin-left:auto;font-family:var(--f-body);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.phone-ui .me-mini img{width:13px;height:12px;image-rendering:pixelated}
+.phone-ui .me.open .me-mini{display:none}
+.phone-ui .me-chev{display:block;width:8px;height:8px;margin-left:4px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg) translateY(-2px);flex:none}
+.phone-ui .me.open .me-chev{margin-left:auto;transform:rotate(-135deg)}
+.phone-ui .more-btn{display:inline-flex;min-width:44px;min-height:40px;font-size:18px}
+.phone-ui .actions:not(.open)>.btn:not(.more-btn){display:none}
+.phone-ui .actions.open{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:220px;padding:6px;gap:6px;background:var(--panel);border:2px solid var(--bark-lo);pointer-events:auto}
+.phone-ui .actions.open .btn{min-height:40px}
+.phone-ui .actions.open .more-btn{grid-column:1/-1}
+.phone-ui .toasts{width:min(380px,calc(100% - 340px));top:8px}
+.phone-ui .toast{font-size:13px}
+/* portrait on a phone or tablet: ask to turn it (and lock landscape where the browser allows it) */
+.rotate{display:none}
+@media (orientation:portrait){
+  .touch-ui .rotate{position:fixed;inset:0;z-index:60;display:grid;place-content:center;justify-items:center;gap:14px;padding:24px;text-align:center;background:var(--ink)}
+}
+.rotate h2{margin:0;font-family:var(--f-display);font-size:28px;font-weight:700;color:var(--gold);line-height:1.1}
+.rotate p{margin:0;color:var(--muted);max-width:300px}
+.rotate-phone{width:46px;height:78px;margin-bottom:10px;border:4px solid var(--cream);border-radius:8px;position:relative;animation:turn 2.4s ease-in-out infinite}
+.rotate-phone::after{content:"";position:absolute;left:50%;bottom:5px;width:10px;height:3px;margin-left:-5px;background:var(--cream)}
+@keyframes turn{0%,25%{transform:rotate(0)}55%,100%{transform:rotate(-90deg)}}
+@media (prefers-reduced-motion:reduce){.rotate-phone{animation:none;transform:rotate(-90deg)}}
+/* short landscape screens (phones on their side): setup and start screens side by side and compact */
+@media (orientation:landscape) and (max-height:540px){
+  .screen{padding-block:10px}
+  .setup{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:10px}
+  .setup-preview{position:sticky;top:0;height:calc(100dvh - 20px);min-height:0}
+  .setup-form{padding:12px 14px;gap:12px}
+  .setup-form h2{font-size:22px}
+  .setup-tabs{position:sticky;top:-10px;z-index:3;background:var(--panel);margin-inline:-14px;padding:6px 14px}
+  .setup-tabs [role=tab]{min-height:38px;padding:6px}
+  .av-row{grid-template-columns:96px minmax(0,1fr)}
+  .grid2{grid-template-columns:1fr 1fr}
+  .login-card{padding:16px 18px}
+  .brand h1{font-size:34px}
+  .modal{padding-block:8px}
+  .modal-panel{padding:14px 16px;gap:12px}
+  .modal-panel h2{font-size:22px}
+}
 
 .boot{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-family:var(--f-body);font-size:18px;font-weight:700}
 
@@ -333,10 +410,6 @@ legend{padding:0 0 4px;font-family:var(--f-body);font-size:15px;font-weight:700;
   .tab-actions .btn{flex:1 1 auto}
   .slider{grid-template-columns:1fr;gap:4px}
   .hint{bottom:150px}
-}
-@media (pointer:coarse){
-  .hint{bottom:156px}
-  .prompt{bottom:160px;font-weight:700}
 }
 @media (prefers-reduced-motion:reduce){
   .toast,.toast.out{animation:none}

@@ -101,7 +101,7 @@ mindmap
 | `js/app.js` | 3561 | All logic in one `(function(){'use strict'; ... })();` IIFE. Lines are dense one-liners: read by range, not whole. |
 | `tests/harness.js` | 181 | `createClient({net,search})` runs app.js in its own `vm` context (fake DOM, cookie jar, localStorage, math-faithful THREE stub, strict Web Audio stub) and exposes internals as `client.G` by regex-replacing the final `})();`, so **keep `})();` as the last line of app.js**. `createPeerNet()` is an in-memory PeerJS stand-in (signalling + data connections, JSON-cloned messages, flushed every frame). `step(clients,n,dt,net)` advances several clients on one shared clock. |
 | `tests/room-test.js` | 230 | Host + two guests in one room (91 checks). |
-| `tests/smoke-test.js` | 587 | One browser on the harness (287 checks). |
+| `tests/smoke-test.js` | 610 | One browser on the harness, plus a touch phone client (296 checks). `createClient({coarse:true})` fakes a phone held sideways. |
 | `package.json` | — | `npm start` runs `npx serve -l 5500 .`; `npm test` runs `node tests/smoke-test.js && node tests/room-test.js`. No dependencies. |
 | `README.md` | — | User-facing docs, "Good first changes" table, storage notes, known limits. |
 | `.vscode/` | — | Live Server recommendation, port 5500, 2-space tabs, LF line endings. |
@@ -152,7 +152,7 @@ There is no bundler, no framework and no server: rooms are peer-to-peer between 
 | 2406 | **Player / input** | `cam{yaw,pitch,dist,target}`, `keys` Set, `joy`, `SPAWN {0, 9.5}`, `updatePlayer` (WASD relative to camera, Shift runs 5.6 vs walk 3.0, water slows by .55, jump vy 7, gravity 22, footstep sounds by tile), `blocked`, `supportY` (frozen while in a stall, at an arcade or on a gym machine; speed × `vitalSpeed()`, no running unless `canRun()`; wash pose at a sink), `nearestSeat` (skips desks you don't own), `nearestOtherDesk`, `deskOwnerName`, `sitOn` (starts eating if you hold food and aren't full), `standUp`, `tryInteract` (E key: stand, read board, with a rod cast/strike, take a rod at the stand, take food, brew coffee, wash hands, use a stall, sit, or "That's X's desk"); frozen while casting, reeling or holding a catch; walking off reels the line in |
 | 2469 | Keyboard | while the arcade is open every key goes to `arcKey`; otherwise Esc closes modal or card; Space jumps; E interacts (hold E to reel; starts and stops gym machines); W/S change the level on a gym machine; in a match Space swings and Q leaves; F eats or drinks; Q puts food down or the rod back; K keeps / R releases a catch; M mutes |
 | 2489 | Pointer | drag to orbit, wheel to zoom 4..24, `handlePick` raycast (single click opens card, double click within 400 ms pokes, clicking the board opens it) |
-| 2511 | Touch | joystick `#joy`, `#tUse/#tRun/#tJump`; `resize`, `applyViewOffset` (shifts the view when the card is open), `updateCamera` |
+| 2511 | Touch | `coarse` → `html.touch-ui`, plus `html.phone-ui` when `phoneUI` (short screen side < 600 px; both set near `coarse` at the top). Floating stick: `#moveZone` (left 42%) places `#joy` where the thumb lands; `JOY_R` walk radius, past `JOY_RUN` sets `joy.run`; a quick tap there calls `handlePick`. Canvas: one finger looks, two fingers pinch (`ptrs`, `pinch`). Buttons `#tJump` (Swing in a match), `#tUse` (label from **`useVerb()`**, which mirrors `tryInteract`; hold to reel), `#tEat`, `#tDrop` (`dropAction` = Q); `updateTouchButtons` runs with the 0.4 s prompt refresh. Landscape only: `#rotate` overlay in portrait (CSS), `goLandscape` (fullscreen + `screen.orientation.lock`, first tap), `toggleFull` (`#bFull`). Phone HUD: `#mePanel`, `#hudTr`, `#hudActions` + `#bMore` toggle `.open` (stats and tray one at a time). Then `resize`, `applyViewOffset`, `updateCamera` |
 | 2540 | Labels | `placeEl`, `updateLabels` (projects nameplates and bubbles to screen) |
 | 2560 | Minimap | `mmBase` (prerendered), `drawMinimap` (your desk is a gold square), `zoneAt(x,z)` |
 | 2586 | **Recognition logic** | `persistRec`/`persistData` (saves USERS, plus the cookie for me on this browser), `pushFeed` (max 40), `pushInbox(rec,item)` (max 50; items carry `fromKey`), **`giveApples(from,to,count,reason,note)`** returns `false`, `{became}` or (guests) `{pending:true}`, **`applyGift`** (the rules; solo or host only), **`afterGift`** (animation, toasts, HUD; the host broadcasts `gift` and sends private `me` updates), `animateGift`, `growCrown`, **`doPoke(from,to,msg,net)`** (2.5 s cooldown for your own pokes; guests send `poke`), `pokeData` (inbox; host broadcasts) |
@@ -230,7 +230,7 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 ## Commands
 
 ```bash
-npm test     # smoke test (287 checks) + room test (91 checks), Node 18+
+npm test     # smoke test (296 checks) + room test (91 checks), Node 18+
 npm start    # static server on :5500
 ```
 

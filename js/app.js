@@ -61,6 +61,9 @@ function shade(h,a){const c=hexToRgb(h);const f=a<0?0:255,t=Math.abs(a);return '
 function angleLerp(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t;}
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const coarse=matchMedia('(pointer: coarse)').matches;
+// phones and tablets get the touch controls; phones (short side under 600 px) also start with a compact HUD
+const phoneUI=coarse&&typeof screen!=='undefined'&&Math.min(screen.width,screen.height)<600;
+if(coarse&&document.documentElement){document.documentElement.classList.add('touch-ui');if(phoneUI)document.documentElement.classList.add('phone-ui');}
 const plural=(n,w)=>n+' '+w+(n===1?'':'s');
 function isTyping(){const a=document.activeElement;return !!a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'||a.isContentEditable);}
 
@@ -2676,7 +2679,7 @@ addEventListener('keydown',e=>{
   if(k==='e'&&!e.repeat)tryInteract();
   if(k==='m'&&!e.repeat)toggleMute();
   if(k==='f'&&!e.repeat)startEat();
-  if(k==='q'&&!e.repeat){if(mt.on)quitMatch();else if(state.player&&state.player.rodMesh&&fishing.phase!=='reel')stowRod();else putDownFood();}
+  if(k==='q'&&!e.repeat)dropAction();
   if(k==='k'&&!e.repeat)keepFish();
   if(k==='r'&&!e.repeat)releaseFish();
   if(!state.hintHidden&&['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k))scheduleHintHide();
@@ -2685,13 +2688,18 @@ addEventListener('keyup',e=>{const k=e.key.toLowerCase();keys.delete(k);arcKeys.
 addEventListener('blur',()=>{keys.clear();arcKeys.clear();});
 
 const cvs=renderer.domElement;const raycaster=new THREE.Raycaster();const ndc=new THREE.Vector2();
-let drag=null,lastClick={id:null,t:0};
-cvs.addEventListener('pointerdown',e=>{if(state.mode!=='world')return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false};try{cvs.setPointerCapture(e.pointerId);}catch(_){}});
-cvs.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.lx,dy=e.clientY-drag.ly;drag.lx=e.clientX;drag.ly=e.clientY;
+let drag=null,lastClick={id:null,t:0};const ptrs=new Map();let pinch=null;// two fingers on the view pinch to zoom
+cvs.addEventListener('pointerdown',e=>{if(state.mode!=='world')return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});try{cvs.setPointerCapture(e.pointerId);}catch(_){}
+  if(ptrs.size>=2){const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,dist:cam.dist};drag=null;return;}
+  drag={id:e.pointerId,x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,moved:false};});
+cvs.addEventListener('pointermove',e=>{if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];cam.dist=clamp(pinch.dist*pinch.d/(Math.hypot(a.x-b.x,a.y-b.y)||1),4,24);return;}
+  if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.lx,dy=e.clientY-drag.ly;drag.lx=e.clientX;drag.ly=e.clientY;
   if(!drag.moved&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>6)drag.moved=true;
   if(drag.moved){cam.yaw-=dx*0.0065;cam.pitch=clamp(cam.pitch+dy*0.0045,0.16,1.25);}});
-cvs.addEventListener('pointerup',e=>{if(!drag||drag.id!==e.pointerId)return;const d=drag;drag=null;if(!d.moved)handlePick(e.clientX,e.clientY);});
-cvs.addEventListener('pointercancel',()=>{drag=null;});
+const ptrEnd=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;};
+cvs.addEventListener('pointerup',e=>{ptrEnd(e);if(!drag||drag.id!==e.pointerId)return;const d=drag;drag=null;if(!d.moved)handlePick(e.clientX,e.clientY);});
+cvs.addEventListener('pointercancel',e=>{ptrEnd(e);drag=null;});
 cvs.addEventListener('wheel',e=>{if(state.mode!=='world')return;e.preventDefault();cam.dist=clamp(cam.dist*(e.deltaY>0?1.1:0.9),4,24);},{passive:false});
 function handlePick(cx,cy){
   const r=cvs.getBoundingClientRect();ndc.set(((cx-r.left)/r.width)*2-1,-((cy-r.top)/r.height)*2+1);raycaster.setFromCamera(ndc,camera);
@@ -2706,19 +2714,58 @@ function handlePick(cx,cy){
   else{lastClick={id:ch.id,t:now};openCard(ch);}
 }
 
-/* touch joystick */
-const joyEl=$('#joy'),knob=$('#knob');
+/* touch controls, Minecraft-style: the left thumb walks with a stick that appears where it lands, and pushing past the ring runs
+   (a quick tap there still picks a coworker); the right side drags to look and pinches to zoom; Use, Jump, Eat and Drop sit bottom right */
+const joyEl=$('#joy'),knob=$('#knob'),moveZone=$('#moveZone'),JOY_R=50,JOY_RUN=JOY_R+20;
 if(coarse){$('#touch').hidden=false;}
-joyEl.addEventListener('pointerdown',e=>{joy.active=e.pointerId;try{joyEl.setPointerCapture(e.pointerId);}catch(_){}moveJoy(e);scheduleHintHide();});
-joyEl.addEventListener('pointermove',e=>{if(joy.active===e.pointerId)moveJoy(e);});
-const endJoy=()=>{joy.active=false;joy.x=joy.y=0;knob.style.transform='';};
-joyEl.addEventListener('pointerup',endJoy);joyEl.addEventListener('pointercancel',endJoy);
-function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const m=r.width/2-14,l=Math.hypot(dx,dy);if(l>m){dx*=m/l;dy*=m/l;}joy.x=dx/m;joy.y=dy/m;knob.style.transform='translate('+dx+'px,'+dy+'px)';}
+moveZone.addEventListener('pointerdown',e=>{if(joy.active!==false||state.mode!=='world')return;if(e.preventDefault)e.preventDefault();
+  joy.active=e.pointerId;joy.cx=e.clientX;joy.cy=e.clientY;joy.t0=performance.now();joy.moved=false;try{moveZone.setPointerCapture(e.pointerId);}catch(_){}
+  joyEl.style.left=e.clientX+'px';joyEl.style.top=e.clientY+'px';joyEl.style.bottom='auto';joyEl.classList.add('on');moveJoy(e);scheduleHintHide();});
+moveZone.addEventListener('pointermove',e=>{if(joy.active===e.pointerId)moveJoy(e);});
+function endJoy(e){if(joy.active!==e.pointerId)return;const tap=!joy.moved&&performance.now()-joy.t0<350;joy.active=false;joy.x=joy.y=0;joy.run=false;
+  knob.style.transform='';joyEl.style.left=joyEl.style.top=joyEl.style.bottom='';joyEl.classList.remove('on');joyEl.classList.remove('run');if(tap&&state.mode==='world')handlePick(e.clientX,e.clientY);}
+moveZone.addEventListener('pointerup',endJoy);moveZone.addEventListener('pointercancel',endJoy);
+function moveJoy(e){let dx=e.clientX-joy.cx,dy=e.clientY-joy.cy;const l=Math.hypot(dx,dy);if(l>8)joy.moved=true;joy.run=l>JOY_RUN;joyEl.classList.toggle('run',joy.run);
+  if(l>JOY_R){dx*=JOY_R/l;dy*=JOY_R/l;}joy.x=dx/JOY_R;joy.y=dy/JOY_R;knob.style.transform='translate('+dx+'px,'+dy+'px)';}
 $('#tJump').addEventListener('pointerdown',e=>{e.preventDefault();if(mt.on)matchSwing();else jumpQueued=true;});// Swing during a match
 $('#tUse').addEventListener('click',tryInteract);
 ['pointerdown','pointerup','pointercancel','pointerleave'].forEach(t=>$('#tUse').addEventListener(t,()=>{fishing.hold=t==='pointerdown';}));// hold Use to reel
 $('#tEat').addEventListener('click',startEat);
-$('#tRun').addEventListener('click',e=>{joy.run=!joy.run;e.currentTarget.setAttribute('aria-pressed',String(joy.run));});
+$('#tDrop').addEventListener('click',dropAction);
+// Q / Drop: leave a match, put the rod back, or put your food down
+function dropAction(){if(mt.on)quitMatch();else if(state.player&&state.player.rodMesh&&fishing.phase!=='reel')stowRod();else putDownFood();}
+// the Use button names what it will do here (same order as tryInteract); Drop shows while you hold food or a rod
+function useVerb(){const P=state.player;if(!P||state.mode!=='world'||state.modal||arc.open||mt.on||rr.use||rr.wash)return '';
+  if(gym.use)return 'Stop';if(P.seat)return 'Stand';
+  if(!P.eating){if(nearestArcade())return 'Play';if(nearestGym())return 'Start';}
+  if(courtHere())return 'Play';
+  if(P.rodMesh)return fishing.phase==='reel'?'Reel':(fishing.phase==='wait'||fishing.phase==='bite')?'Strike':fishing.phase?'':'Cast';
+  if(nearRack())return 'Rod';if(P.root.position.distanceTo(BOARD_POS)<3.2)return 'Read';if(P.eating)return '';
+  if(nearestCounterItem()>=0||nearCooler())return 'Take';if(nearCoffee())return brew.on?'':'Coffee';if(nearestSink())return 'Wash';
+  const st=nearestStall();if(st)return st.occ?'':st.kind==='shower'?'Shower':'Enter';
+  return nearestSeat()?'Sit':'';}
+function updateTouchButtons(){const P=state.player,v=useVerb(),u=$('#tUse');$('#tUseV').textContent=v||'Use';u.classList.toggle('idle',!v);u.setAttribute('aria-label',v?v+' (Use)':'Use');
+  const d=$('#tDrop'),rod=!!(P&&P.rodMesh&&fishing.phase!=='reel'&&fishing.phase!=='caught'),food=!!(P&&P.held&&!P.eating);d.hidden=!(rod||food);if(!d.hidden)d.textContent=rod?'Stow':'Drop';}
+
+/* landscape only on phones and tablets: going full screen lets Android lock the orientation; elsewhere the rotate screen asks */
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+function goLandscape(){const el=document.documentElement,req=el&&(el.requestFullscreen||el.webkitRequestFullscreen);
+  const lock=()=>{try{const o=screen.orientation;if(o&&o.lock)o.lock('landscape').catch(()=>{});}catch(_){}};
+  if(!fsEl()&&req){try{const r=req.call(el,{navigationUI:'hide'});if(r&&r.then)r.then(lock,()=>{});else lock();}catch(_){lock();}}else lock();}
+function toggleFull(){if(fsEl())(document.exitFullscreen||document.webkitExitFullscreen).call(document);else goLandscape();}
+if(coarse){const canFs=!!(document.fullscreenEnabled||document.webkitFullscreenEnabled);$('#rotateFull').hidden=!canFs;$('#bFull').hidden=!canFs;
+  $('#rotateFull').addEventListener('click',goLandscape);$('#bFull').addEventListener('click',toggleFull);
+  if(document.addEventListener)document.addEventListener('fullscreenchange',()=>{$('#bFull').textContent=fsEl()?'Exit full screen':'Full screen';});
+  if(canFs)addEventListener('pointerdown',goLandscape,{once:true});}// the first tap goes full screen and locks landscape
+
+/* phone HUD: starts compact; tap your panel for all your stats, the map to enlarge it, and ☰ for the buttons */
+if(phoneUI){const mp=$('#mePanel'),tr=$('#hudTr'),acts=$('#hudActions'),more=$('#bMore');
+  const flip=(el,a)=>{const o=!el.classList.contains('open');el.classList.toggle('open',o);(a||el).setAttribute('aria-expanded',String(o));return o;},
+    shut=(el,a)=>{el.classList.remove('open');(a||el).setAttribute('aria-expanded','false');};// your stats and the button tray share the left edge: one at a time
+  for(const [el,label] of [[mp,'Your stats'],[tr,'Map']]){el.setAttribute('role','button');el.setAttribute('tabindex','0');el.setAttribute('aria-expanded','false');el.setAttribute('aria-label',label);
+    const tap=()=>{if(flip(el)&&el===mp)shut(acts,more);};el.addEventListener('click',tap);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();tap();}});}
+  more.addEventListener('click',()=>{if(flip(acts,more))shut(mp);});
+  acts.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button');if(b&&b!==more)shut(acts,more);});}
 
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();applyViewOffset();}
 function applyViewOffset(){const w=stage.clientWidth,h=stage.clientHeight;if(state.mode==='login'&&w>900)camera.setViewOffset(w,h,-w*0.17,0,w,h);else camera.clearViewOffset();}
@@ -2884,6 +2931,7 @@ function renderMe(){
   $('#meRecv').textContent=me.received||0;$('#meBar').style.width=Math.min(100,(me.received||0)/(GOLDEN_AFTER+1)*100)+'%';
   $('#meBarWrap').classList.toggle('full',isGolden(me.received));$('#meGoal').textContent=goalText(me.received||0);
   const unread=(me.inbox||[]).filter(i=>!i.read).length;const b=$('#inboxBadge');b.hidden=!unread;b.textContent=unread;
+  const mb=$('#moreBadge');mb.hidden=!unread;mb.textContent=unread;$('#meMini').innerHTML='<img src="'+ICON_APPLE+'" alt="">'+left;// phone HUD
   P.refresh();
 }
 let lastZone='';
@@ -3017,7 +3065,7 @@ $('#bSound').addEventListener('click',toggleMute);renderSoundBtn();
 let hintTimer=null;
 function scheduleHintHide(){if(hintTimer||state.hintHidden)return;hintTimer=setTimeout(()=>{$('#hint').hidden=true;},9000);}
 $('#hintClose').addEventListener('click',()=>{$('#hint').hidden=true;state.hintHidden=true;Store.set('ga_hint_hidden',true);});
-if(coarse){$('#hint').innerHTML='<span>Joystick to walk</span><span>Tap a coworker</span><span>Double-tap to poke</span><span>Drag to look</span><button class="x" id="hintClose2" type="button" aria-label="Hide controls">×</button>';$('#hintClose2').addEventListener('click',()=>{$('#hint').hidden=true;state.hintHidden=true;Store.set('ga_hint_hidden',true);});}
+if(coarse){$('#hint').innerHTML='<span>Left thumb: walk · push past the ring to run</span><span>Right side: drag to look · pinch to zoom</span><span>Tap a coworker · double-tap to poke</span><button class="x" id="hintClose2" type="button" aria-label="Hide controls">×</button>';$('#hintClose2').addEventListener('click',()=>{$('#hint').hidden=true;state.hintHidden=true;Store.set('ga_hint_hidden',true);});}
 
 /* =========================================================
    Rooms: peer-to-peer over the same Wi-Fi
@@ -3570,7 +3618,7 @@ function frame(now){
         else if((s=nearestSeat()))msg=kh+(s.desk?' to sit at your desk':' to sit')+(hf?' and '+(isDrink(hf)?'drink':'eat'):'');
         else if((o=nearestOtherDesk()))msg=esc(deskOwnerName(o))+'’s desk · only they can sit here';
         else if(hf)msg=eatMsg+(coarse?'':' · <span class="key">Q</span> put it down');}
-      $('#tEat').hidden=!(P&&P.held&&!P.eating);
+      $('#tEat').hidden=!(P&&P.held&&!P.eating);if(coarse)updateTouchButtons();
       pr.hidden=!msg;if(msg&&pr.innerHTML!==msg)pr.innerHTML=msg;
     }
   }

@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const clock = { now: 1000 };
 // internals exposed to tests, injected right before the app's closing `})();`
 const EXPORTS = 'SLOT_STRIPS,SLOT_PAY,SLOT_WILD,slotLines,slotWallet,arcBanner:()=>arcBanner,COURTS,COURT_FX,mt,matchSwing,quitMatch,startMatch,makeShot,newBall,stepBall,inCourt,halfAt,isOver,GYM,GYM_KINDS,GYM_COOLER,gym,gymLevel,gymLabel,nearestGym,gymWho,nearCooler,gymStats,startGym,stopGym,ARCADES,GAMES,arc,arcKeys,toIn,nearestArcade,arcadeOccupants,exitArcade,useArcade,arcStart,state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
-  + 'AV,randomAvatar,randomDesk,arrToAvatar,avatarToArr,setTab,pv,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
+  + 'joy,useVerb,dropAction,AV,randomAvatar,randomDesk,arrToAvatar,avatarToArr,setTab,pv,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
   + 'FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup,'
   + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld,'
   + 'V,STALLS,rr,nearestStall,nearestSink,nutrition,vitalSpeed,canRun,saveVitals,loadVitals,ACT,'
@@ -151,7 +151,7 @@ function createClient(opts = {}) {
   Object.assign(win, {
     document, localStorage, THREE, AudioContext, Peer: opts.net ? opts.net.Peer : undefined,
     location: { protocol: 'https:', origin: 'https://golden.test', pathname: '/', search: opts.search || '' }, isSecureContext: true,
-    devicePixelRatio: 2, matchMedia: () => ({ matches: false }), addEventListener: (t, fn) => { (win._l[t] = win._l[t] || []).push(fn); },
+    devicePixelRatio: 2, matchMedia: q => ({ matches: !!opts.coarse && /pointer: coarse/.test(q) }), screen: opts.coarse ? { width: 844, height: 390 } : undefined, addEventListener: (t, fn) => { (win._l[t] = win._l[t] || []).push(fn); },
     requestAnimationFrame: cb => { rafCb = cb; }, performance: { now: () => clock.now },
     setTimeout, clearTimeout, setInterval: () => 0, console, URLSearchParams,
     btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary'), escape, unescape
