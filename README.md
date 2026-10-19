@@ -2,7 +2,7 @@
 
 <p align="center"><b>A cosy block-style office campus where your team walks, works, plays and thanks each other with apples.</b></p>
 
-<p align="center"><a href="https://itslabs-india.github.io/GoldenApple/"><b>▶ Play now in your browser</b></a> · <a href="https://itslabs-india.github.io/GoldenApple/showcase.html">Take the tour</a> · Free · No download · Desktop, phone and tablet</p>
+<p align="center"><a href="https://itslabs-india.github.io/GoldenApple/play/"><b>▶ Play now in your browser</b></a> · <a href="https://itslabs-india.github.io/GoldenApple/">Take the tour</a> · Free · No download · Desktop, phone and tablet</p>
 
 ![Walk the campus with your whole team](docs/screenshots/promo-walkthrough.jpg)
 

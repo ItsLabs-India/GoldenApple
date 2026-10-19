@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Golden Apple</title>
+  <meta name="description" content="A block-style office world where coworkers poke each other and give daily apples to earn Golden Apple status.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="stage"></div>
+    <div id="labels"></div>
+
+    <section id="screen-login" class="screen" aria-label="Log in">
+      <div class="login-card panel">
+        <div class="brand">
+          <img id="brandIcon" alt="" width="55" height="50">
+          <div>
+            <h1>Golden Apple</h1>
+            <p class="sub">Office world</p>
+          </div>
+        </div>
+        <p class="lede">Walk the office as your own block avatar, poke coworkers, and hand out apples for good work.</p>
+
+        <div id="roomStep" class="room-step">
+          <div id="roomRecent" class="room-recent" hidden></div>
+          <form id="joinForm" class="room-form" novalidate>
+            <label for="roomCode">Join a room</label>
+            <div class="room-row">
+              <input id="roomCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="Invite code, like K7X2MQ">
+              <button class="btn btn-gold" type="submit">Join</button>
+            </div>
+          </form>
+          <form id="hostForm" class="room-form" novalidate>
+            <label for="roomName">Or create a room</label>
+            <div class="room-row">
+              <input id="roomName" type="text" maxlength="28" autocomplete="off" placeholder="Room name, like Design team">
+              <button class="btn" type="submit">Create</button>
+            </div>
+          </form>
+          <p class="err" id="roomErr" role="alert"></p>
+          <p class="fine">Rooms are for people on the same Wi-Fi. Whoever creates the room keeps this tab open while others play.</p>
+          <button class="btn btn-ghost" id="soloBtn" type="button">Play on this browser only</button>
+        </div>
+
+        <div id="roomBar" class="room-bar" hidden>
+          <span id="roomBarText"></span>
+          <button class="btn sm" id="roomLeave" type="button">Leave</button>
+        </div>
+
+        <div id="returning" class="returning" hidden>
+          <img id="retHead" class="head lg" alt="">
+          <div style="min-width:0">
+            <div class="ret-hi">Welcome back</div>
+            <div class="ret-name" id="retName"></div>
+            <div class="ret-mail" id="retMail"></div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-gold" id="retEnter" type="button">Enter workspace</button>
+            <button class="btn" id="retSwitch" type="button">Use a different email</button>
+          </div>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <div class="field">
+            <label for="email">Work email</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" spellcheck="false">
+            <p class="err" id="emailErr" role="alert"></p>
+          </div>
+          <button class="btn btn-gold wide" type="submit">Continue</button>
+          <p class="fine">No password. One profile per email.</p>
+        </form>
+
+        <ul class="rules">
+          <li><img id="ruleApple" alt=""><span>Give up to <b>10 apples</b> a day</span></li>
+          <li><img id="ruleGold" alt=""><span>Receive <b>more than 10</b> in total to become a <b>Golden Apple</b></span></li>
+          <li><span class="key">2×</span><span><b>Double-click</b> a coworker to poke them</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="screen-setup" class="screen" aria-label="Profile setup" hidden>
+      <div class="setup">
+        <div class="setup-preview panel">
+          <div id="previewMount" aria-label="Avatar and desk preview. Drag to turn."></div>
+          <div class="pv-bottom">
+            <span class="tag pv-tag" id="pvTag"><i class="dot" style="background:var(--st-available)"></i><span>Your name</span></span>
+            <span class="pv-hint" id="pvHint">Drag to turn · Your character is 32 skin pixels tall</span>
+          </div>
+        </div>
+
+        <form class="setup-form panel" id="setupForm" novalidate>
+          <div>
+            <h2 id="setupTitle">Set up your profile</h2>
+            <p class="fine" id="setupSub">Creating a profile for <b id="setupEmail"></b></p>
+          </div>
+          <div class="setup-tabs" role="tablist" aria-label="Profile sections">
+            <button type="button" role="tab" id="tabProfile" aria-controls="panelProfile" aria-selected="true">Profile</button>
+            <button type="button" role="tab" id="tabAvatar" aria-controls="panelAvatar" aria-selected="false" tabindex="-1">Character</button>
+            <button type="button" role="tab" id="tabDesk" aria-controls="panelDesk" aria-selected="false" tabindex="-1">Desk</button>
+          </div>
+          <fieldset id="panelProfile" role="tabpanel" aria-labelledby="tabProfile">
+            <legend class="sr-only">Profile</legend>
+            <div class="field">
+              <label for="pName">Display name</label>
+              <input id="pName" type="text" maxlength="24" autocomplete="nickname" placeholder="How coworkers see you">
+              <p class="err" id="pNameErr" role="alert"></p>
+            </div>
+            <div class="grid2">
+              <div class="field">
+                <label for="pRole">Role</label>
+                <input id="pRole" type="text" maxlength="32" placeholder="Product Designer">
+              </div>
+              <div class="field">
+                <label for="pTeam">Team</label>
+                <input id="pTeam" type="text" maxlength="24" list="teamList" placeholder="Design">
+                <datalist id="teamList"><option value="Design"><option value="Engineering"><option value="Product"><option value="Quality"><option value="Data"><option value="Support"><option value="People"><option value="Marketing"></datalist>
+              </div>
+            </div>
+            <div class="field">
+              <label for="pStatus">Status</label>
+              <select id="pStatus">
+                <option value="available">Available</option>
+                <option value="focus">Focused</option>
+                <option value="meeting">In a meeting</option>
+                <option value="break">On a break</option>
+              </select>
+            </div>
+          </fieldset>
+          <fieldset id="panelAvatar" role="tabpanel" aria-labelledby="tabAvatar" hidden>
+            <legend class="sr-only">Character</legend>
+            <div class="tab-actions">
+              <div class="av-row">
+                <span class="lbl" id="l-gender">Gender</span>
+                <div class="chip-row" role="radiogroup" aria-labelledby="l-gender" id="genderRow"></div>
+              </div>
+              <button class="btn btn-gold" id="randomBtn" type="button">Randomise character</button>
+              <p class="fine" id="genderNote"></p>
+            </div>
+            <div id="avControls" style="display:grid;gap:10px"></div>
+          </fieldset>
+          <fieldset id="panelDesk" role="tabpanel" aria-labelledby="tabDesk" hidden>
+            <legend class="sr-only">Your desk</legend>
+            <p class="fine" id="deskNote"></p>
+            <div class="tab-actions">
+              <button class="btn btn-gold" id="randomDeskBtn" type="button">Randomise desk</button>
+              <button class="btn" id="resetDeskBtn" type="button">Default desk</button>
+            </div>
+            <div id="dkControls" style="display:grid;gap:10px"></div>
+          </fieldset>
+          <p class="err" id="setupErr" role="alert"></p>
+          <div class="form-actions">
+            <button type="button" class="btn" id="setupBack">Back</button>
+            <button type="submit" class="btn btn-gold" id="setupSave">Enter workspace</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <div id="hud" hidden>
+      <div class="hud-tl">
+        <div class="me panel" id="mePanel">
+          <div class="me-row">
+            <img id="meHead" class="head" alt="">
+            <div class="me-id">
+              <div class="me-name"><span id="meName"></span><span class="gold-chip" id="meGold" hidden></span></div>
+              <div class="me-sub" id="meSub"></div>
+            </div>
+            <span class="me-mini" id="meMini" aria-hidden="true"></span>
+            <span class="me-chev" aria-hidden="true"></span>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="lbl">Apples to give today</span><span class="num" id="meLeft">10</span></div>
+            <div class="pips" id="mePips" aria-hidden="true"></div>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="lbl">Apples received</span><span class="num" id="meRecv">0</span></div>
+            <div class="bar" id="meBarWrap"><i id="meBar" style="width:0"></i></div>
+            <div class="goal" id="meGoal"></div>
+          </div>
+          <div class="vitals" role="group" aria-label="Your needs">
+            <div class="vital" id="vHp"><img id="icHp" alt=""><span class="lbl">Health</span><div class="bar"><i id="vHpBar" style="width:85%"></i><b class="pend" id="vHpPend"></b></div><span class="num"><span id="vHpNum">85</span><span class="tr" id="vHpTr"></span></span></div>
+            <div class="vital" id="vEn"><img id="icEn" alt=""><span class="lbl">Energy</span><div class="bar"><i id="vEnBar" style="width:85%"></i><b class="pend" id="vEnPend"></b></div><span class="num"><span id="vEnNum">85</span><span class="tr" id="vEnTr"></span></span></div>
+            <div class="vital" id="vBl"><img id="icBl" alt=""><span class="lbl">Restroom</span><div class="bar"><i id="vBlBar" style="width:15%"></i><b class="pend" id="vBlPend"></b></div><span class="num"><span id="vBlNum">15</span><span class="tr" id="vBlTr"></span></span></div>
+            <div class="vact" id="vAct">Standing</div>
+            <div class="vwarn" id="vWarn" hidden></div>
+          </div>
+        </div>
+        <div class="actions" id="hudActions">
+          <button class="btn sm more-btn" id="bMore" type="button" aria-expanded="false" aria-label="Menu and actions">☰<span class="badge" id="moreBadge" hidden>0</span></button>
+          <button class="btn sm" id="bBoard" type="button">Orchard</button>
+          <button class="btn sm" id="bInbox" type="button">Inbox<span class="badge" id="inboxBadge" hidden>0</span></button>
+          <button class="btn sm" id="bEdit" type="button">Profile</button>
+          <button class="btn sm" id="bMenu" type="button">Menu</button>
+          <button class="btn sm" id="bSound" type="button" aria-pressed="true">Sound</button>
+          <button class="btn sm btn-gold" id="bRoom" type="button" hidden>Room</button>
+          <button class="btn sm" id="bFull" type="button" hidden>Full screen</button>
+        </div>
+      </div>
+
+      <div class="hud-tr" id="hudTr">
+        <div class="map panel">
+          <canvas id="minimap" width="168" height="168" aria-label="Map of the office"></canvas>
+          <div class="map-zone" id="mapZone">Plaza</div>
+        </div>
+        <div class="feed panel">
+          <div class="feed-h">Orchard activity</div>
+          <ol id="feed"></ol>
+        </div>
+      </div>
+
+      <div class="hint panel" id="hint">
+        <span id="hintKeys"><span class="key">WASD</span> walk</span>
+        <span><span class="key">Shift</span> run</span>
+        <span><span class="key">Space</span> jump</span>
+        <span><span class="key">E</span> sit</span>
+        <span><span class="key">F</span> eat</span>
+        <span><span class="key">M</span> sound</span>
+        <span>Drag to look</span>
+        <span>Click a coworker</span>
+        <span>Double-click to poke</span>
+        <button class="x" id="hintClose" type="button" aria-label="Hide controls">×</button>
+      </div>
+      <div class="crosshair" id="crosshair" hidden aria-hidden="true"></div>
+      <div class="prompt" id="prompt" hidden></div>
+      <div class="match-bar panel" id="matchBar" aria-live="polite" hidden>
+        <div class="m-title" id="mTitle">Tennis</div>
+        <div class="m-score"><span class="m-p" id="mP0">You</span><b id="mS0">0</b><i>–</i><b id="mS1">0</b><span class="m-p" id="mP1">—</span></div>
+        <div class="m-note" id="mNote">No opponent</div>
+        <button class="btn btn-apple" id="mLeave" type="button" hidden>Leave match (Q)</button>
+      </div>
+      <div class="fish-ui panel" id="fishUI" hidden><span class="lbl">Line tension</span><div class="tbar"><i id="fishTen"></i></div><span class="num" id="fishDist">0.0 m</span></div>
+      <div class="catch panel" id="catchCard" role="dialog" aria-label="Your catch" hidden>
+        <div class="catch-body" id="catchBody"></div>
+        <div class="catch-actions"><button class="btn btn-gold" id="cKeep" type="button">Keep (K)</button><button class="btn" id="cRelease" type="button">Release (R)</button></div>
+      </div>
+
+      <aside id="card" class="panel" role="region" aria-label="Coworker profile" hidden>
+        <button class="x" id="cardClose" type="button" aria-label="Close profile">×</button>
+        <div id="cardBody" style="display:grid;gap:14px"></div>
+      </aside>
+
+      <!-- touch: left thumb walks (a stick appears where you touch; past the ring = run), the right side looks round, buttons bottom right -->
+      <div id="touch" hidden>
+        <div class="move-zone" id="moveZone" aria-hidden="true"></div>
+        <div class="joy" id="joy" aria-hidden="true"><div class="knob" id="knob"></div><span class="joy-run">Run</span></div>
+        <div class="tbtns">
+          <button class="btn tb-drop" id="tDrop" type="button" hidden>Drop</button>
+          <button class="btn btn-apple tb-eat" id="tEat" type="button" hidden>Eat</button>
+          <button class="btn tb-use" id="tUse" type="button"><b id="tUseV">Use</b><small>Use</small></button>
+          <button class="btn btn-gold tb-jump" id="tJump" type="button">Jump</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="modal" hidden>
+      <div class="modal-panel panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <button class="x" id="modalClose" type="button" aria-label="Close">×</button>
+        <div id="modalBody" style="display:grid;gap:16px"></div>
+      </div>
+    </div>
+
+    <div class="arcade" id="arcade" role="dialog" aria-modal="true" aria-labelledby="arcTitle" hidden>
+      <div class="arc-bar">
+        <b class="arc-title" id="arcTitle">Arcade</b>
+        <span class="arc-players" id="arcPlayers"></span>
+        <span class="arc-keys" id="arcKeys"><span class="key">Arrows</span>/<span class="key">WASD</span> move · <span class="key">Space</span> fire / launch · <span class="key">Enter</span> pause / play again · <span class="key">Esc</span> leave</span>
+        <button class="btn" id="arcFull" type="button">Full screen</button>
+        <button class="btn btn-apple" id="arcExit" type="button">Leave</button>
+      </div>
+      <div class="arc-screen"><canvas id="arcCanvas" width="384" height="216" aria-label="Arcade game screen"></canvas></div>
+      <div class="arc-pad" id="arcPad" hidden>
+        <div class="arc-dpad"><button class="btn" data-b="1" type="button" aria-label="Up">▲</button><button class="btn" data-b="4" type="button" aria-label="Left">◀</button><button class="btn" data-b="8" type="button" aria-label="Right">▶</button><button class="btn" data-b="2" type="button" aria-label="Down">▼</button></div>
+        <button class="btn" data-b="32" type="button">Start</button>
+        <button class="btn btn-gold arc-a" data-b="16" type="button">Fire</button>
+      </div>
+    </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <!-- phones and tablets play in landscape only -->
+    <div class="rotate" id="rotate" role="alertdialog" aria-labelledby="rotateTitle">
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <h2 id="rotateTitle">Turn your device sideways</h2>
+      <p>Golden Apple plays in landscape on phones and tablets.</p>
+      <button class="btn btn-gold" id="rotateFull" type="button" hidden>Play full screen</button>
+    </div>
+    <div class="boot panel" id="bootErr" hidden>The 3D engine didn't load. Check your connection and reload the page.</div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- rooms: PeerJS for the joining handshake, qrcodejs for invite QR codes (the game still runs if these fail to load) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="../js/app.js"></script>
+</body>
+</html>

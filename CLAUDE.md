@@ -15,7 +15,8 @@ mindmap
       Node 18 only for tests
       PeerJS 1.5.4 and qrcodejs 1.0.0 via CDN
     Files
-      index.html - all screens and DOM ids
+      index.html - marketing landing page
+      play/index.html - the game: all screens and DOM ids
       css/styles.css - root tokens
       js/app.js - everything else, one IIFE
       tests/harness.js - fake browser and fake PeerJS net
@@ -102,7 +103,7 @@ mindmap
 
 | File | Lines | What it holds |
 |---|---|---|
-| `index.html` | 276 | Every screen as static markup: `#screen-login`, `#screen-setup`, `#hud` (with `#card`, `#touch`, `#minimap`, `#feed`), `#modal`, `#toasts`, `#bootErr`. The start screen has `#roomStep` (join/create forms, `#roomRecent`, `#soloBtn`) and `#roomBar`; the HUD has `#bRoom`. It loads three.js r128, PeerJS 1.5.4 and qrcodejs 1.0.0 from cdnjs, then `js/app.js`. |
+| `play/index.html` | 297 | The game page (GitHub Pages `/play/`; loads `../css/styles.css` and `../js/app.js`). Every screen as static markup: `#screen-login`, `#screen-setup`, `#hud` (with `#card`, `#touch`, `#minimap`, `#feed`), `#modal`, `#toasts`, `#bootErr`. The start screen has `#roomStep` (join/create forms, `#roomRecent`, `#soloBtn`) and `#roomBar`; the HUD has `#bRoom`. It loads three.js r128, PeerJS 1.5.4 and qrcodejs 1.0.0 from cdnjs, then `js/app.js`. |
 | `css/styles.css` | 362 | `:root` tokens (bark, cream, gold, apple, the `--st-*` status colours and the `--f-body` (Atkinson Hyperlegible, all text) and `--f-display` (Pixelify Sans, 24px+ headings and numbers only) fonts), then components (`.panel .btn .tag .bubble .chip .bar .pips`) and per-screen styles. Pixel look: hard inset box-shadows, `image-rendering:pixelated`. |
 | `js/app.js` | 3861 | All logic in one `(function(){'use strict'; ... })();` IIFE. Lines are dense one-liners: read by range, not whole. |
 | `tests/harness.js` | 181 | `createClient({net,search})` runs app.js in its own `vm` context (fake DOM, cookie jar, localStorage, math-faithful THREE stub, strict Web Audio stub) and exposes internals as `client.G` by regex-replacing the final `})();`, so **keep `})();` as the last line of app.js**. `createPeerNet()` is an in-memory PeerJS stand-in (signalling + data connections, JSON-cloned messages, flushed every frame). `step(clients,n,dt,net)` advances several clients on one shared clock. |
@@ -110,7 +111,7 @@ mindmap
 | `tests/smoke-test.js` | 694 | One browser on the harness, plus a touch phone client (337 checks). `createClient({coarse:true})` fakes a phone held sideways. |
 | `package.json` | — | `npm start` runs `npx serve -l 5500 .`; `npm test` runs `node tests/smoke-test.js && node tests/room-test.js`. No dependencies. |
 | `README.md` | — | The GitHub store page for players (features, screenshots, controls, good to know). No developer or local-server notes. |
-| `showcase.html` | — | Standalone marketing page on GitHub Pages (`/showcase.html`), in the game's palette and fonts, using `docs/screenshots/promo-*.jpg`. The game itself stays at `index.html`. |
+| `index.html` | — | The marketing landing page (GitHub Pages root), in the game's palette and fonts, using `docs/screenshots/promo-*.jpg`; its Play buttons go to `play/`. It forwards old `/?room=CODE` invite links to `play/?room=CODE`. |
 | `docs/screenshots/` | — | Store and showcase images. `promo-*.jpg` are captioned Minecraft-style shots taken with mock coworkers in a throwaway browser (the app has no mock users). |
 | `.vscode/` | — | Live Server recommendation, port 5500, 2-space tabs, LF line endings. |
 
@@ -215,7 +216,7 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 | Avatar options | `AV` (~88) and the painter `paintSkin` (~548). Indexes are stored in cookies, so append new options rather than reordering. |
 | Campus scenery | The Eco campus block at the end of `buildFurniture`; new outdoor area names in `ECO_AREAS`. Keep it off paths, seat approaches and `via` points, use `zone:'plaza'` for any new bench (the routing check skips plaza seats), and run `npm test`. |
 | Move rooms or furniture | `ZONES` (~262), `buildLayout`, `buildFurniture`. After any change **run `npm test`**: the routing check catches spot-to-spot paths through solids and blocked seat approaches. |
-| HUD, card, modals | `renderMe`, `renderCard`, `openBoard/openInbox/openMenu` (~1180–1310) plus the matching markup in index.html |
+| HUD, card, modals | `renderMe`, `renderCard`, `openBoard/openInbox/openMenu` (~1180–1310) plus the matching markup in play/index.html |
 | Theme | `:root` in css/styles.css (lines 9–36) |
 | Rooms | Messages are handled in `hostOnMsg` and `guestOnMsg` (~Rooms section). Anything that changes shared data must go through the host: guests send a message, the host validates (`cleanProfile`, budget checks), saves, then broadcasts public data (`pubRec`) and sends private data (`me`) only to its owner. Add a check to `tests/room-test.js`. |
 | A server instead of the host tab | Keep the message protocol and replace `hostRoom`/`hostOnMsg` with a server (for example a Cloudflare Durable Object); guests barely change. |
@@ -234,7 +235,7 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 - The sky is a repainted canvas (`drawSky`); `hemi`, `amb` and `sun` intensities are driven by `updateDayNight`, so don't hard-code them elsewhere. Night sounds swap ambience events through `nightEv`.
 - The test's THREE stub throws on bad colours (anything other than `#rrggbb` passed to `Color.set`), on UVs outside [0,1], and on InstancedMesh index overflow. Keep those valid.
 - Cookies hold only the compact profile (~220 B with the desk). Inbox and recent stay in localStorage only.
-- The test doesn't render. Check visual changes in a browser (`npm start`, then http://localhost:5500).
+- The test doesn't render. Check visual changes in a browser (`npm start`, then http://localhost:5500/play/).
 - Rooms: never send emails, inboxes or budgets to other guests (use `pubRec`). Guests must not change shared data locally except for instant feedback that the host's reply overwrites (the budget after a gift).
 - Rooms only connect on the same network because `PEER_OPTS` has `iceServers:[]`. Adding STUN/TURN servers would let rooms work across networks.
 - The test harness runs each client in its own `vm` context, so objects passed between clients are JSON-cloned like real messages.
