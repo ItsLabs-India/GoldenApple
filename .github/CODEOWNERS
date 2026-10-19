@@ -1,0 +1,8 @@
+# Every change is reviewed by the maintainer before it is merged into main.
+# The files that matter most for safety are listed again so it is clear they always need a careful look:
+# the room and message code, the game page (its Content Security Policy and pinned scripts), the workflows and the security notes.
+*                      @vivekrbot
+/js/app.js             @vivekrbot
+/play/index.html       @vivekrbot
+/.github/              @vivekrbot
+/SECURITY.md           @vivekrbot

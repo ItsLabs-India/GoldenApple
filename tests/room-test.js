@@ -200,6 +200,19 @@ function signIn(c, email, name) {
   signIn(b, 'bea@example.com'); run(4);
   ok(B.state.mode === 'world' && B.bikes()[1].d === -1 && B.ride.b === null, 'B comes back and sees the bike still there (not riding it)');
   hp.root.position.set(0, 0, 9.5); A.state.player.root.position.set(6, 0, 6); B.state.player.root.position.set(6, 0, 6); run(10);
+  console.log('Hostile guests (a guest sending messages no honest browser would)');
+  const evil = m => A.room.hostConn.send(m), polluted = () => ['received', 'recent', 'inbox', 'goldenAt', 'read', 'given'].some(k => H_.USERS()[k] !== undefined);// H_.USERS() lives in the host's realm, so it shows a polluted prototype
+  evil({ t: 'give', to: '__proto__', count: 1, reason: 'Team player', note: 'x' }); evil({ t: 'poke', to: '__proto__', msg: 'Hey there!' }); evil({ t: 'dm', to: 'constructor', d: { g: 'x' } }); evil({ t: 'give', to: 'constructor', count: 1, reason: 'Team player', note: 'x' }); run(10);
+  ok(!polluted(), 'naming "__proto__" or "constructor" as a gift, poke or message target changes nothing (no prototype pollution)');
+  evil({ t: 'st', s: { x: 1, y: 0, z: 1, held: 'constructor', seat: 'constructor', stall: 99, gym: [999, 9, 9], arc: [999, 9, 0, 0], ct: [999, 1, 0, 0, 0, 0, 9, 9], bob: 'abc', junk: 'A'.repeat(1e6) } }); run(15);
+  const aNet = B.state.chars.get('local:' + ak).net;
+  ok(aNet && aNet.held === null && aNet.stall === null && aNet.gym === null && aNet.arc === null && aNet.ct === null && !('junk' in aNet), 'a crafted player state is cut down to known fields with valid values before it is relayed, so nobody’s game loop breaks and a huge message doesn’t travel');
+  evil({ t: 'update', profile: { name: 'Arjun Mehta', status: 'constructor', role: 'R'.repeat(5000), avatar: { skin: 1e9 } } }); run(10);
+  ok(H_.USERS()[ak].status === 'available' && H_.USERS()[ak].role.length <= 32, 'a profile update can’t set a made-up status or an oversize role');
+  for (let i = 0; i < 600; i++) evil({ t: 'st', s: { x: i / 10, y: 0, z: 5 } }); run(5);
+  ok(B.state.chars.get('local:' + ak).net.x < 35 && B.state.chars.get('local:' + ak).net.x > 0, 'a flood of messages is cut off after 300 a second (x reached ' + B.state.chars.get('local:' + ak).net.x + ' of 59.9)');
+  await sleep(1100); // the limit is per real second: let A’s window reopen before the next sections
+  ok(!H_.dmSizeOk({ g: 'x', pad: 'A'.repeat(30000) }) && H_.dmSizeOk({ g: 'st', s: { sh: [{ x: 1, y: 2 }], en: Array.from({ length: 30 }, (_, i) => ({ x: i, y: i, hp: 1 })) } }), 'a message to another player over 20 KB is refused, while a normal game-state message is fine');
   console.log('Leaving and coming back');
   A.logout(); run(10);
   ok(B.state.chars.get('local:' + ak).kind === 'local' && B.state.chars.get('local:' + ak).spot === B.DESK_SLOTS[aSlot].spot, 'when guest A logs out, others see them Away at their desk');

@@ -6,7 +6,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 
 const clock = { now: 1000 };
 // internals exposed to tests, injected right before the app's closing `})();`
-const EXPORTS = 'SLOT_STRIPS,SLOT_PAY,SLOT_WILD,slotLines,slotWallet,arcBanner:()=>arcBanner,COURTS,COURT_FX,mt,matchSwing,quitMatch,startMatch,makeShot,newBall,stepBall,inCourt,halfAt,isOver,GYM,GYM_KINDS,GYM_COOLER,gym,gymLevel,gymLabel,nearestGym,gymWho,nearCooler,gymStats,startGym,stopGym,ARCADES,GAMES,arc,arcKeys,toIn,nearestArcade,arcadeOccupants,exitArcade,useArcade,arcStart,state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
+const EXPORTS = 'dmSizeOk,cleanNet,ownProp,SLOT_STRIPS,SLOT_PAY,SLOT_WILD,slotLines,slotWallet,arcBanner:()=>arcBanner,COURTS,COURT_FX,mt,matchSwing,quitMatch,startMatch,makeShot,newBall,stepBall,inCourt,halfAt,isOver,GYM,GYM_KINDS,GYM_COOLER,gym,gymLevel,gymLabel,nearestGym,gymWho,nearCooler,gymStats,startGym,stopGym,ARCADES,GAMES,arc,arcKeys,toIn,nearestArcade,arcadeOccupants,exitArcade,useArcade,arcStart,state,giveApples,doPoke,openCard,closeCard,openBoard,openInbox,openMenu,SPOTS,routeFromTo,cellTop,topMap,idx,USERS:()=>USERS,WORLD:()=>WORLD,budgetLeft,isGolden,logout,findUser,tryInteract,nearestSeat,renderCard,giveState,zoneAt,getTile,'
   + 'mouseLook,setMouseLook,captureMouse,mouseLocked,cvs,bikes:()=>BIKES,bikeDo,BIKE,BIKE_STANDS,DOCKS,ride,bikeHits,angDiff,nearestBike,RELEASES,VERSION,openWhatsNew,noticeRelease,closeModal,FURN,PROPS,DOORS,MOVE,GRAV,PX,cam,bump,solidBox,joy,useVerb,dropAction,AV,randomAvatar,randomDesk,arrToAvatar,avatarToArr,setTab,pv,DESK_SLOTS,DESK_DEFAULT,DK,DK_KEYS,buildDesk,placeDesk,clearDesk,deskToArr,nearestOtherDesk,openSetup,Sound,sfx,toggleMute,SND,'
   + 'FOODS,FOOD,menu,menuFor,menuBucket,refreshMenu,SLOT_Z,COFFEE_Z,buildFood,brew,nearestCounterItem,counterGroup,'
   + 'room,myKey,kOf,charOfKey,normCode,validCode,hostRoom,joinRoom,leaveRoom,openRoomModal,inviteLink,leaveWorld,'
@@ -60,7 +60,7 @@ function createPeerNet() {
 
 /* ---------- one fake browser ---------- */
 function createClient(opts = {}) {
-  const els = new Map(), store = {}, cookieJar = {}, win = { _l: {} };
+  const els = new Map(), store = {}, cookieJar = {}, win = { _l: {}, GA_STRICT: true };
   let rafCb = null, audioNodes = 0;
   function el(tag, id) {
     return {
@@ -159,7 +159,7 @@ function createClient(opts = {}) {
   win.window = win;
   const context = vm.createContext(win);
   const client = {
-    win, store, cookieJar, getEl, get G() { return win.__ga; }, get audioNodes() { return audioNodes; },
+    win, store, cookieJar, getEl, get els() { return els; }, get G() { return win.__ga; }, get audioNodes() { return audioNodes; },
     boot() { vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', 'releases.js'), 'utf8'), context, { filename: 'releases.js' }); vm.runInContext(appSource(), context, { filename: 'app.js' }); return this; },
     // one animation frame for this client only, advancing the shared clock
     frames(n, dtMs) { for (let i = 0; i < n; i++) { clock.now += dtMs; if (opts.net) opts.net.flush(); this.tick(); } },

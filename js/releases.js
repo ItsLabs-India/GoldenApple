@@ -2,6 +2,10 @@
    and the landing page (What's new) both read this list, so every release PR from stage to main adds one entry at the top.
    Keep the notes short and written for players: what they can now do, not how it was built. */
 window.GA_RELEASES=[
+  {v:'1.5.1',date:'2026-10-19',title:'Safer rooms',notes:[
+    'A misbehaving player can no longer freeze the game for everyone else in a room.',
+    'Everything other players send is checked before it is used, and the game page only runs trusted scripts.',
+    'The game keeps running if something unexpected goes wrong for a moment.']},
   {v:'1.5.0',date:'2026-10-19',title:'A new home page and What’s new',notes:[
     'Golden Apple has a home page: take the tour, then press Play.',
     'The game now lives at its own address. Old invite links and QR codes still work.',

@@ -107,10 +107,13 @@ mindmap
 | `css/styles.css` | 362 | `:root` tokens (bark, cream, gold, apple, the `--st-*` status colours and the `--f-body` (Atkinson Hyperlegible, all text) and `--f-display` (Pixelify Sans, 24px+ headings and numbers only) fonts), then components (`.panel .btn .tag .bubble .chip .bar .pips`) and per-screen styles. Pixel look: hard inset box-shadows, `image-rendering:pixelated`. |
 | `js/app.js` | 3861 | All logic in one `(function(){'use strict'; ... })();` IIFE. Lines are dense one-liners: read by range, not whole. |
 | `tests/harness.js` | 181 | `createClient({net,search})` runs app.js in its own `vm` context (fake DOM, cookie jar, localStorage, math-faithful THREE stub, strict Web Audio stub) and exposes internals as `client.G` by regex-replacing the final `})();`, so **keep `})();` as the last line of app.js**. `createPeerNet()` is an in-memory PeerJS stand-in (signalling + data connections, JSON-cloned messages, flushed every frame). `step(clients,n,dt,net)` advances several clients on one shared clock. |
-| `tests/room-test.js` | 246 | Host + two guests in one room (98 checks). |
-| `tests/smoke-test.js` | 694 | One browser on the harness, plus a touch phone client (337 checks). `createClient({coarse:true})` fakes a phone held sideways. |
+| `tests/room-test.js` | 246 | Host + two guests in one room (103 checks). |
+| `tests/smoke-test.js` | 694 | One browser on the harness, plus a touch phone client (344 checks). `createClient({coarse:true})` fakes a phone held sideways. |
 | `package.json` | — | `npm start` runs `npx serve -l 5500 .`; `npm test` runs `node tests/smoke-test.js && node tests/room-test.js`. No dependencies. |
 | `README.md` | — | The GitHub store page for players (features, screenshots, controls, good to know). No developer or local-server notes. |
+| `SECURITY.md` | — | How to report a problem privately, and the trust model in plain words. |
+| `CONTRIBUTING.md` | — | How to send a change (fork, or a `contrib/...` branch), run the tests, and what a good pull request has. |
+| `.github/` | — | `workflows/test.yml` (runs `npm test` on pull requests into main and pushes to stage; read-only, no secrets), `CODEOWNERS` (the maintainer reviews everything), `pull_request_template.md`. |
 | `js/releases.js` | — | `window.GA_RELEASES`, the release notes (newest first), loaded by both pages and by the test harness before app.js. |
 | `index.html` | — | The marketing landing page (GitHub Pages root), in the game's palette and fonts, using `docs/screenshots/promo-*.jpg`; its Play buttons go to `play/`. It forwards old `/?room=CODE` invite links to `play/?room=CODE`. |
 | `docs/screenshots/` | — | Store and showcase images. `promo-*.jpg` are captioned Minecraft-style shots taken with mock coworkers in a throwaway browser (the app has no mock users). |
@@ -238,20 +241,22 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 - The test's THREE stub throws on bad colours (anything other than `#rrggbb` passed to `Color.set`), on UVs outside [0,1], and on InstancedMesh index overflow. Keep those valid.
 - Cookies hold only the compact profile (~220 B with the desk). Inbox and recent stay in localStorage only.
 - The test doesn't render. Check visual changes in a browser (`npm start`, then http://localhost:5500/play/).
+- Network data is untrusted, in both directions (a guest to the host, and the host or a relayed guest to everyone): never index an object with a key from a message without `ownProp(obj,key)` (`__proto__` and `constructor` are real keys), and pass every player-state message through `cleanNet` (a whitelist of fields, types and index ranges) before applying or relaying it. The host drops over 300 messages a second from one guest (`MSG_RATE`) and refuses direct messages over 20 KB (`dmSizeOk`). The frame loop always reschedules itself and a remote player whose state throws is dropped (the test harness sets `GA_STRICT` so tests still fail on errors). `tests/room-test.js` has a Hostile guests section: add a check there for any new message type.
+- play/index.html carries a Content Security Policy (meta tag) and integrity hashes on the three CDN scripts. Adding a script, domain or connection (for example a stats server) means updating the policy; changing a pinned library version means a new `integrity` value (cdnjs publishes them: `https://api.cdnjs.com/libraries/<name>/<version>?fields=sri`). No inline scripts or event handlers on the game page.
 - Rooms: never send emails, inboxes or budgets to other guests (use `pubRec`). Guests must not change shared data locally except for instant feedback that the host's reply overwrites (the budget after a gift).
 - Rooms only connect on the same network because `PEER_OPTS` has `iceServers:[]`. Adding STUN/TURN servers would let rooms work across networks.
 - The test harness runs each client in its own `vm` context, so objects passed between clients are JSON-cloned like real messages.
 
 ## Branches and releases
 
-- **`main` is live.** GitHub Pages serves it (`/` home page, `/play/` game), so nothing is committed to `main` directly.
+- **`main` is live.** GitHub Pages serves it (`/` home page, `/play/` game), so nothing is committed to `main` directly. GitHub rulesets enforce it: **Protect main** (pull request with 1 approval, no force push or delete; the maintainer bypasses) and **Contribution branches only** (everything except `contrib/**` is create/update/delete/force-push protected; admins bypass). Outside contributors fork or use `contrib/...` branches.
 - **`stage` is where work happens.** Commit and push to `stage`; keep it in sync with `main` after each release (`git merge main` if `main` moved).
 - **A release is a PR from `stage` into `main`.** Before opening it, add the release as the first entry of `js/releases.js` (`v`, `date`, `title`, 2–4 short player-facing `notes`) and bump the version (minor for features, patch for fixes). The game shows the list in Menu → What's new (`openWhatsNew`) and tells returning players once after an update (`noticeRelease`, `ga_seen_release`); the home page renders it in its What's new section. The PR body uses `.github/pull_request_template.md` with the same notes. Merging is the user's call.
 
 ## Commands
 
 ```bash
-npm test     # smoke test (337 checks) + room test (98 checks), Node 18+
+npm test     # smoke test (344 checks) + room test (103 checks), Node 18+
 npm start    # static server on :5500
 ```
 
