@@ -73,6 +73,19 @@
     .key{display:inline-block;min-width:26px;padding:2px 7px;background:var(--bark-lo);border:2px solid #000;font-weight:700;text-align:center;font-size:14px}
     .controls{overflow-x:auto}
 
+    /* what's new: rendered from js/releases.js, the same list the game shows */
+    .news{display:grid;gap:16px}
+    .rel{padding:20px 22px}
+    .rel.latest{border-color:var(--gold-deep);box-shadow:inset 3px 3px 0 var(--bark-hi),inset -3px -3px 0 rgba(0,0,0,.45),0 6px 0 rgba(0,0,0,.35),0 0 0 3px var(--gold-deep)}
+    .rel-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:14px;color:var(--muted);font-weight:700}
+    .ver{font-family:var(--f-display);font-variant-ligatures:none;font-size:18px;color:var(--gold);background:var(--bark-lo);border:2px solid var(--bark-hi);padding:0 8px}
+    .new{background:var(--gold);color:var(--ink);padding:2px 8px;letter-spacing:.08em;text-transform:uppercase;font-size:12px}
+    .rel h3{font-family:var(--f-body);font-size:21px;color:var(--cream);margin:10px 0 6px}
+    .rel ul{margin:0;padding-left:20px;color:var(--muted)}
+    details.older{color:var(--muted)}
+    details.older summary{cursor:pointer;font-weight:700;color:var(--gold);padding:8px 0}
+    details.older .news{margin-top:12px}
+    .verlink{color:#1d3a24;font-weight:700;font-size:15px;text-align:center;margin:0}
     .final{text-align:center;background:linear-gradient(#18110b,#241b14)}
     .final .cta{margin-top:24px}
     footer{padding:28px 0 40px;color:var(--muted);font-size:14px;text-align:center}
@@ -100,6 +113,7 @@
         <a class="btn btn-gold" href="play/">▶ Play now, free</a>
         <a class="btn" href="#tour">Take the tour</a>
       </div>
+      <p class="verlink" id="verLink" hidden></p>
       <ul class="facts"><li>Runs in your browser</li><li>Free, nothing to install</li><li>Desktop, phone and tablet</li><li>Play with your team on the same Wi-Fi</li></ul>
       <img class="hero-shot" src="docs/screenshots/promo-walkthrough.jpg" alt="Coworkers walking around the plaza and its giant apple tree, under the Golden Apple Campus arch" width="1280" height="720">
     </div>
@@ -166,6 +180,14 @@
       </div>
     </section>
 
+    <section id="news">
+      <div class="wrap">
+        <h2>What’s new</h2>
+        <p class="lead">Golden Apple keeps growing. Here’s what changed in the latest updates. In the game, find this under Menu → What’s new.</p>
+        <div class="news" id="newsList"><p class="lead">Release notes need JavaScript to show.</p></div>
+      </div>
+    </section>
+
     <section style="background:#1d150f">
       <div class="wrap">
         <h2>Easy to pick up</h2>
@@ -199,5 +221,15 @@
   </main>
 
   <footer><div class="wrap">Golden Apple · made by ItsLabs India · Rooms work on one shared Wi-Fi network, for teams you trust.</div></footer>
+  <script src="js/releases.js"></script>
+  <script>
+    (function(){var R=(window.GA_RELEASES||[]).filter(function(r){return r&&r.v;});if(!R.length)return;
+      var esc=function(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+      var card=function(r,i){return '<article class="rel panel'+(i?'':' latest')+'"><div class="rel-head"><span class="ver">v'+esc(r.v)+'</span><span>'+esc(r.date||'')+'</span>'+(i?'':'<span class="new">Latest</span>')+'</div>'
+        +'<h3>'+esc(r.title||'')+'</h3><ul>'+(r.notes||[]).map(function(n){return '<li>'+esc(n)+'</li>';}).join('')+'</ul></article>';};
+      var top=R.slice(0,3),rest=R.slice(3);
+      document.getElementById('newsList').innerHTML=top.map(card).join('')+(rest.length?'<details class="older"><summary>Older updates ('+rest.length+')</summary><div class="news">'+rest.map(function(r){return card(r,1);}).join('')+'</div></details>':'');
+      var v=document.getElementById('verLink');v.innerHTML='New in v'+esc(R[0].v)+': <a href="#news">'+esc(R[0].title)+'</a>';v.hidden=false;})();
+  </script>
 </body>
 </html>

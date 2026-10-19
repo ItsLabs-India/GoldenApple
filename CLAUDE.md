@@ -111,6 +111,7 @@ mindmap
 | `tests/smoke-test.js` | 694 | One browser on the harness, plus a touch phone client (337 checks). `createClient({coarse:true})` fakes a phone held sideways. |
 | `package.json` | — | `npm start` runs `npx serve -l 5500 .`; `npm test` runs `node tests/smoke-test.js && node tests/room-test.js`. No dependencies. |
 | `README.md` | — | The GitHub store page for players (features, screenshots, controls, good to know). No developer or local-server notes. |
+| `js/releases.js` | — | `window.GA_RELEASES`, the release notes (newest first), loaded by both pages and by the test harness before app.js. |
 | `index.html` | — | The marketing landing page (GitHub Pages root), in the game's palette and fonts, using `docs/screenshots/promo-*.jpg`; its Play buttons go to `play/`. It forwards old `/?room=CODE` invite links to `play/?room=CODE`. |
 | `docs/screenshots/` | — | Store and showcase images. `promo-*.jpg` are captioned Minecraft-style shots taken with mock coworkers in a throwaway browser (the app has no mock users). |
 | `.vscode/` | — | Live Server recommendation, port 5500, 2-space tabs, LF line endings. |
@@ -218,6 +219,7 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 | Move rooms or furniture | `ZONES` (~262), `buildLayout`, `buildFurniture`. After any change **run `npm test`**: the routing check catches spot-to-spot paths through solids and blocked seat approaches. |
 | HUD, card, modals | `renderMe`, `renderCard`, `openBoard/openInbox/openMenu` (~1180–1310) plus the matching markup in play/index.html |
 | Theme | `:root` in css/styles.css (lines 9–36) |
+| Release notes | Add the new release at the top of `js/releases.js`; the game (`RELEASES`, `VERSION`, `openWhatsNew`, `noticeRelease`) and the home page both read it. The smoke test checks the shape and that versions go down the list. |
 | Rooms | Messages are handled in `hostOnMsg` and `guestOnMsg` (~Rooms section). Anything that changes shared data must go through the host: guests send a message, the host validates (`cleanProfile`, budget checks), saves, then broadcasts public data (`pubRec`) and sends private data (`me`) only to its owner. Add a check to `tests/room-test.js`. |
 | A server instead of the host tab | Keep the message protocol and replace `hostRoom`/`hostOnMsg` with a server (for example a Cloudflare Durable Object); guests barely change. |
 
@@ -239,6 +241,12 @@ Character ids are `'me'` and `'local:<key>'` (key = email on this browser, priva
 - Rooms: never send emails, inboxes or budgets to other guests (use `pubRec`). Guests must not change shared data locally except for instant feedback that the host's reply overwrites (the budget after a gift).
 - Rooms only connect on the same network because `PEER_OPTS` has `iceServers:[]`. Adding STUN/TURN servers would let rooms work across networks.
 - The test harness runs each client in its own `vm` context, so objects passed between clients are JSON-cloned like real messages.
+
+## Branches and releases
+
+- **`main` is live.** GitHub Pages serves it (`/` home page, `/play/` game), so nothing is committed to `main` directly.
+- **`stage` is where work happens.** Commit and push to `stage`; keep it in sync with `main` after each release (`git merge main` if `main` moved).
+- **A release is a PR from `stage` into `main`.** Before opening it, add the release as the first entry of `js/releases.js` (`v`, `date`, `title`, 2–4 short player-facing `notes`) and bump the version (minor for features, patch for fixes). The game shows the list in Menu → What's new (`openWhatsNew`) and tells returning players once after an update (`noticeRelease`, `ga_seen_release`); the home page renders it in its What's new section. The PR body uses `.github/pull_request_template.md` with the same notes. Merging is the user's call.
 
 ## Commands
 
