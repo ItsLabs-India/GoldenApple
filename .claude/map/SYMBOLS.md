@@ -5,6 +5,9 @@
 ======================================================================
 fn mulberry32:54 · fn hashStr:55 · fn timeAgo:58 · fn hexToRgb:59 · fn shade:60 · fn angleLerp:61 · fn isTyping:68 · fn pixelIcon:72 · fn randomAvatar:122 · fn randomDesk:146 · fn saveUsers:156 · fn writeProfileCookie:158 · fn readProfileCookie:162 · fn recordFromCookie:163 · fn findUser:164 · fn putUser:171 · fn spendBudget:173 · fn purgeDemo:180 · fn saveWorld:195 · fn drawSky:216 · fn canvasTex:227 · fn blockGeo:271 · fn cellTop:304 · fn areaTop:306 · fn solidRect:307 · fn clearRect:308 · fn solidBox:310 · fn ringPath:336 · fn propClose:344 · fn addSpot:352 · fn buildLayout:357 · fn tree:402 · fn bench:423 · fn plant:433 · fn textCanvas:438 · fn textTex:439 · fn leafIcon:441 · fn sign:442 · fn addLamp:463 · fn dmat:489 · fn db:490 · fn buildDesk:493 · fn animateDesk:549 · fn placeDesk:554 · fn clearDesk:559 · fn allocDesk:564 · fn buildFurniture:572 · fn buildTrees:1025 · fn finalizeMeshes:1049 · fn updateTreeApples:1074 · fn drawBoard:1086 · fn buildDoors:1110 · fn updateDoors:1119 · fn daylightAt:1137 · fn mixHex:1148 · fn lookAt:1149 · fn updateDayNight:1164 · fn buildFood:1230 · fn menuFor:1235 · fn drawMenuBoard:1239
 
+## js/releases.js
+Golden Apple release notes, newest first. The game (Menu → What's new,
+
 ## tests/harness.js ←2
 Shared fake browser for the Golden Apple tests.
 fn appSource:16 · fn createPeerNet:23 · fn createClient:62 · fn step:173 · fn makeChecker:174
