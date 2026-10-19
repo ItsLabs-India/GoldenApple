@@ -1,0 +1,26 @@
+name: Tests
+
+# Runs the full test suite (smoke test + room test) on every pull request into main and on every push to stage.
+# Read-only token, no secrets, and it uses `pull_request` (not `pull_request_target`), so a pull request from a fork
+# can't reach anything private. First-time contributors' runs also wait for a maintainer's approval (repo setting).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [stage]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test

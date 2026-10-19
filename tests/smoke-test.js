@@ -154,7 +154,7 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(!getEl('#panelProfile').hidden && getEl('#panelAvatar').hidden && getEl('#panelDesk').hidden && getEl('#tabProfile').getAttribute('aria-selected') === 'true', 'the setup opens on the Profile tab, with Character and Desk hidden');
   G.setTab('desk'); ok(getEl('#panelProfile').hidden && !getEl('#panelDesk').hidden && G.pv.view === 'desk' && getEl('#tabDesk').getAttribute('tabindex') === '0', 'the Desk tab shows the desk fields and the desk preview');
   G.setTab('avatar'); ok(!getEl('#panelAvatar').hidden && G.pv.view === 'avatar', 'the Character tab shows the character fields and the avatar preview');
-  const share = (g, k, set) => { let n = 0; for (let i = 0; i < 600; i++) if (set.includes(G.randomAvatar(g)[k])) n++; return n / 600; };
+  const share = (g, k, set) => { let n = 0; for (let i = 0; i < 6000; i++) if (set.includes(G.randomAvatar(g)[k])) n++; return n / 6000; };// 6000 samples: the closest limit (Male short hair, 60% vs 55%) is then ~7 standard deviations away, so this never fails by chance
   const LONG = [3, 4], SHORT = [0, 1, 6];// Long + Bun; Short, Buzz, Bald
   ok(share(1, 'hairStyle', LONG) > 0.4 && share(2, 'hairStyle', LONG) < 0.1 && share(2, 'hairStyle', SHORT) > 0.55 && share(1, 'hairStyle', SHORT) < 0.25, 'randomise follows the gender: mostly long hair and buns for Female, short cuts for Male');
   ok([0, 1, 2].every(g => { for (let i = 0; i < 200; i++) { const a = G.randomAvatar(g); if (a.gender !== g || Object.keys(a).some(k => a[k] < 0 || a[k] >= G.AV[k].length)) return false; } return true; }), 'every randomised character keeps its gender and valid options');
@@ -532,6 +532,11 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   G.startMatch(0, 0, 'nobody', 0); frames(100, 50); ok(!MT.on && getEl('#toasts').children.some(t => /left the court/.test(t.innerHTML)), 'if your opponent disappears, the match ends');
   Object.assign(Vt, { sw: 0, ex: 0 }); Pf.root.position.set(0, 0, 9.5); frames(5, 16);
   }
+  console.log('Resilience');
+  c.win.GA_STRICT = false; const boom = { update() { throw new Error('boom'); } }; G.state.chars.set('boom', boom);
+  let loopOk = true; try { frames(5, 16); } catch (e) { loopOk = false; } G.state.chars.delete('boom'); c.win.GA_STRICT = true;
+  ok(loopOk, 'one bad frame doesn’t stop the game loop: it keeps running after an error');
+  frames(3, 16); ok(G.state.mode === 'world', 'and the game carries on normally afterwards');
   console.log('Apples & Golden Apple');
   const oldCh = G.state.chars.get('local:old@example.com');
   ok(!!oldCh && oldCh.kind === 'local', 'the other real profile on this browser is in the world as Away');

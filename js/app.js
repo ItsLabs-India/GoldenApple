@@ -3320,7 +3320,7 @@ if(coarse){$('#hint').innerHTML='<span>Left thumb: walk · push past the ring to
    Guests connect straight to the host with WebRTC; PeerJS only does the joining handshake. No STUN or TURN
    servers are configured, so only devices on the same network can connect.
    ========================================================= */
-const PROTO=2,ROOM_PREFIX='golden-apple-room-',CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',PEER_OPTS={debug:0,config:{iceServers:[]}};
+const MSG_RATE=300,PROTO=2,ROOM_PREFIX='golden-apple-room-',CODE_CHARS='ABCDEFGHJKMNPQRSTUVWXYZ23456789',PEER_OPTS={debug:0,config:{iceServers:[]}};
 const newRoomCode=()=>Array.from({length:6},()=>CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
 const normCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 const validCode=c=>c.length===6&&[...c].every(ch=>CODE_CHARS.includes(ch));
@@ -3331,6 +3331,8 @@ const pubRec=u=>({key:u.key,name:u.name,role:u.role,team:u.team,status:u.status,
 const pubUsers=()=>{const o={};for(const k in USERS)o[k]=pubRec(USERS[k]);return o;};
 const charOfKey=k=>k!=null&&k===myKey()?state.player:state.chars.get('local:'+k);
 const str=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
+// a name from the network ('__proto__', 'constructor', ...) must only ever find a real own entry, never something inherited from Object.prototype
+const ownProp=(o,k)=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(o,k)?o[k]:undefined;
 function saveRoomData(){if(room.mode==='host'&&room.data)Store.set('ga_room_'+room.code,room.data);}
 function rememberRoom(list,entry){const old=Store.get(list,[]).find(x=>x.code===entry.code)||{};const a=Store.get(list,[]).filter(x=>x.code!==entry.code);a.unshift(Object.assign(old,entry));Store.set(list,a.slice(0,6));}
 const roomEmail=(list,code)=>(Store.get(list,[]).find(x=>x.code===code)||{}).email||'';
@@ -3370,7 +3372,8 @@ function hostRoom(code,name,fresh){
 function hostAccept(conn){
   const c={conn,key:null};
   conn.on('open',()=>room.conns.add(c));
-  conn.on('data',m=>{try{hostOnMsg(c,m);}catch(e){console.error(e);}});
+  conn.on('data',m=>{const now=Date.now();if(now-(c.w||0)>=1000){c.w=now;c.n=0;}if(++c.n>MSG_RATE)return;// more than 300 messages a second from one guest are dropped
+    try{hostOnMsg(c,m);}catch(e){console.error(e);}});
   const drop=()=>{if(!room.conns.delete(c))return;if(c.key)setOnline(c.key,[...room.conns].some(o=>o.key===c.key));};
   conn.on('close',drop);conn.on('error',drop);
 }
@@ -3384,7 +3387,7 @@ function onPresence(k,on){
   if(state.mode==='world'){syncPeople();if(u&&k!==myKey())toast('<b>'+esc(u.name)+'</b> '+(on?'joined the room.':'left the room.'),'',2400);}
   renderRoomBtn();if(state.modal==='room')openRoomModal();
 }
-function cleanProfile(p){return{name:str(p.name,24).replace(/\s+/g,' '),role:str(p.role,32),team:str(p.team,24),status:STATUS[p.status]&&p.status!=='away'?p.status:'available',avatar:arrToAvatar(avatarToArr(p.avatar||{})),desk:deskOf({desk:p.desk})};}
+function cleanProfile(p){return{name:str(p.name,24).replace(/\s+/g,' '),role:str(p.role,32),team:str(p.team,24),status:ownProp(STATUS,p.status)&&p.status!=='away'?p.status:'available',avatar:arrToAvatar(avatarToArr(p.avatar||{})),desk:deskOf({desk:p.desk})};}
 function findKeyByEmail(email){for(const k in USERS)if(USERS[k].email===email)return k;return null;}
 function newUserKey(email){let k='p'+hashStr(email).toString(36);while(USERS[k])k+='x';return k;}
 function hostBind(c,k,created){c.key=k;c.conn.send({t:'login',ok:true,rec:USERS[k],created:!!created});setOnline(k,true);}
@@ -3401,17 +3404,17 @@ function hostOnMsg(c,m){
       const rec=Object.assign({key:newUserKey(email),email},p,{deskSlot:-1,received:0,createdAt:Date.now(),given:null,recent:[],inbox:[]});
       allocDesk(rec);USERS[rec.key]=rec;saveUsers();broadcast({t:'user',rec:pubRec(rec)});onUserChanged(rec.key);
       hostBind(c,rec.key,true);return;}
-    case 'dm':if(c.key&&typeof m.to==='string'&&m.d&&typeof m.d==='object'){if(m.to===myKey())onDm(c.key,m.d);else if(USERS[m.to])sendTo(m.to,{t:'dm',from:c.key,d:m.d});}return;
+    case 'dm':if(c.key&&typeof m.to==='string'&&m.d&&typeof m.d==='object'&&dmSizeOk(m.d)){if(m.to===myKey())onDm(c.key,m.d);else if(ownProp(USERS,m.to))sendTo(m.to,{t:'dm',from:c.key,d:m.d});}return;
     case 'logout':if(c.key){const k=c.key;c.key=null;setOnline(k,[...room.conns].some(o=>o.key===k));}return;
   }
   const k=c.key,me=k?USERS[k]:null;if(!me)return;// everything below needs a signed-in guest
   switch(m.t){
-    case 'st':if(m.s&&typeof m.s==='object'){broadcast({t:'st',k,s:m.s},c);applyNetState(k,m.s);}return;
+    case 'st':{const s=cleanNet(m.s);if(s){broadcast({t:'st',k,s},c);applyNetState(k,s);}return;}
     case 'update':{const p=cleanProfile(m.profile||{});if(p.name.length<2)return;Object.assign(me,p);allocDesk(me);saveUsers();broadcast({t:'user',rec:pubRec(me)});sendTo(k,{t:'me',rec:me});onUserChanged(k);return;}
-    case 'give':{const td=USERS[m.to],count=m.count|0,reason=REASONS.includes(m.reason)?m.reason:null,note=str(m.note,120);
+    case 'give':{const td=ownProp(USERS,m.to),count=m.count|0,reason=REASONS.includes(m.reason)?m.reason:null,note=str(m.note,120);
       const r=td&&reason?applyGift(me,td,count,reason,note):false;
       if(r)afterGift(me,td,count,reason,note,r.became);else{c.conn.send({t:'err',msg:'Those apples couldn’t be sent.'});c.conn.send({t:'me',rec:me});}return;}
-    case 'poke':{const td=USERS[m.to];if(!td||!POKES.includes(m.msg)||td===me)return;const f=charOfKey(k),t=charOfKey(m.to);
+    case 'poke':{const td=ownProp(USERS,m.to);if(!td||!POKES.includes(m.msg)||td===me)return;const f=charOfKey(k),t=charOfKey(m.to);
       if(state.mode==='world'&&f&&t)doPoke(f,t,m.msg,c);else pokeData(me,td,m.msg,c);return;}
     case 'read':(me.inbox||[]).forEach(i=>i.read=true);saveUsers();return;
     case 'bike':{const a=m.a&&typeof m.a==='object'?m.a:{};if(bikeRule(k,str(m.op,6),m.b|0,{d:a.d,x:a.x,z:a.z,h:a.h}))bikesChanged();else c.conn.send({t:'bikes',b:BIKES});return;}// a refusal resends the list
@@ -3446,7 +3449,7 @@ function guestLost(){
   if(room.mode!=='guest')return;room.awaitLogin=false;setRoomStatus('reconnecting');
   clearTimeout(room.retry);room.retry=setTimeout(()=>{if(room.mode==='guest'&&!room.hostConn)connectHost();},4000);
 }
-function mergeRec(r){if(!r||!r.key)return null;const cur=USERS[r.key];if(cur)Object.assign(cur,r);else USERS[r.key]=r;return USERS[r.key];}
+function mergeRec(r){if(!r||typeof r.key!=='string'||!/^p[a-z0-9]{1,24}$/.test(r.key))return null;const cur=USERS[r.key];if(cur)Object.assign(cur,r);else USERS[r.key]=r;return USERS[r.key];}
 function guestLogin(email){room.email=email;room.awaitLogin=true;if(!roomSend({t:'login',email}))room.awaitLogin=false;if(state.mode==='login')showLogin();}
 function guestOnMsg(m){
   if(!m||typeof m!=='object')return;
@@ -3518,7 +3521,25 @@ function syncPeople(){
     ch.refresh();
   }
 }
-function applyNetState(k,s){if(k===myKey()||!s||typeof s!=='object')return;const ch=state.chars.get('local:'+k);if(ch&&ch.kind==='remote')ch.net=s;}
+// Everything another player's browser says about itself is untrusted: keep only known fields with the right type and range, so a
+// hostile or buggy client can't crash anyone's game loop, pick an index that doesn't exist, or push huge messages through the host.
+const fin=(v,lo,hi)=>typeof v==='number'&&isFinite(v)?clamp(v,lo,hi):0;
+const idx3=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(v=>typeof v==='number'&&isFinite(v));
+function cleanNet(s){
+  if(!s||typeof s!=='object'||Array.isArray(s))return null;
+  const o={x:fin(s.x,-60,60),y:fin(s.y,-3,12),z:fin(s.z,-60,60),h:fin(s.h,-12,12),spd:fin(s.spd,0,8),run:!!s.run,air:!!s.air,rod:!!s.rod,swh:!!s.swh,
+    seat:typeof s.seat==='string'&&/^s\d{1,5}$/.test(s.seat)?s.seat:null,held:typeof s.held==='string'&&ownProp(FOOD,s.held)?s.held:null,
+    eat:s.eat==='eat'||s.eat==='drink'?s.eat:null,act:s.act==='wash'?'wash':null,fph:s.fph==='cast'||s.fph==='reel'?s.fph:null,
+    wave:s.wave|0,sw:s.sw|0,cel:s.cel|0,stall:Number.isInteger(s.stall)&&s.stall>=0&&s.stall<STALLS.length?s.stall:null,
+    bob:idx3(s.bob,3)?s.bob.map(v=>clamp(v,-100,100)):null,arc:null,gym:null,ct:null,cb:null};
+  const a=s.arc;if(Array.isArray(a)&&a.length===4&&Number.isInteger(a[0])&&a[0]>=0&&a[0]<ARCADES.length)o.arc=[a[0],a[1]===2?2:1,a[2]|0,a[3]|0];
+  const g=s.gym;if(Array.isArray(g)&&g.length===3&&Number.isInteger(g[0])&&g[0]>=0&&g[0]<GYM.length)o.gym=[g[0],clamp(g[1]|0,0,2),g[2]?1:0];
+  const c=s.ct;if(Array.isArray(c)&&c.length===8&&Number.isInteger(c[0])&&c[0]>=0&&c[0]<COURTS.length)o.ct=[c[0],c[1]===1?1:0,clamp(c[2]|0,0,999),clamp(c[3]|0,0,999),clamp(c[4]|0,0,1e6),c[5]===1?1:0,clamp(c[6]|0,0,3),clamp(c[7]|0,-1,1)];
+  const b=s.cb;if(Array.isArray(b)&&b.length===8&&Number.isInteger(b[0])&&idx3(b.slice(1,7),6))o.cb=[clamp(b[0],0,1e9),...b.slice(1,7).map(v=>clamp(v,-200,200)),b[7]===1?1:0];
+  return o;
+}
+const dmSizeOk=d=>{try{return JSON.stringify(d).length<=20000;}catch(e){return false;}};
+function applyNetState(k,s){if(k===myKey())return;s=cleanNet(s);if(!s)return;const ch=state.chars.get('local:'+k);if(ch&&ch.kind==='remote')ch.net=s;}
 // remote players glide towards their last reported position; seats, held food, eating and waves are mirrored
 function stepRemote(ch,dt){
   const n=ch.net,p=ch.root.position,seat=n.seat?SPOTS.find(s=>s.id===n.seat):null,stall=Number.isInteger(n.stall)?STALLS[n.stall]:null;
@@ -3553,7 +3574,7 @@ function updateRoom(dt){
   room.sendT-=dt;room.keepAlive-=dt;
   if(room.sendT<=0){room.sendT=0.12;const s=myNetState(),j=JSON.stringify(s);
     if(j!==room.lastSent||room.keepAlive<=0){room.lastSent=j;room.keepAlive=2;if(room.mode==='host')broadcast({t:'st',k:myKey(),s});else roomSend({t:'st',s});}}
-  for(const ch of locals)if(ch.kind==='remote'&&ch.net)stepRemote(ch,dt);
+  for(const ch of locals)if(ch.kind==='remote'&&ch.net)try{stepRemote(ch,dt);}catch(e){if(window.GA_STRICT)throw e;ch.net=null;}// a bad state from one player is dropped, never allowed to break everyone's loop
 }
 addEventListener('beforeunload',e=>{if(room.mode==='host'&&room.online.size>1){e.preventDefault();e.returnValue='';}});
 /* ---------- room UI: start-screen bar, HUD button, invite modal ---------- */
@@ -3824,7 +3845,7 @@ function logout(){
    Main loop
    ========================================================= */
 let last=performance.now(),frameN=0,uiT=0;
-function frame(now){
+function frameBody(now){
   const dt=Math.min(0.05,(now-last)/1000);last=now;frameN++;
   if(state.mode==='world')updatePlayer(dt);
   for(const ch of state.chars.values())ch.update(dt);
@@ -3875,8 +3896,10 @@ function frame(now){
     }
   }
   if(state.mode==='setup'&&pv.renderer)renderPreview(dt);
-  requestAnimationFrame(frame);
 }
+let frameErrT=0;
+// the loop always reschedules itself, so an unexpected error in one frame shows in the console (at most every 5 s) instead of freezing the game
+function frame(now){try{frameBody(now);}catch(e){if(window.GA_STRICT)throw e;if(now-frameErrT>5000){frameErrT=now;console.error('frame error',e);}}requestAnimationFrame(frame);}
 setInterval(()=>{if(state.mode==='world'){renderFeed();renderMe();}},20000);
 
 /* boot */
