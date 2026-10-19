@@ -1,4 +1,5 @@
 node_modules/
+marketing/
 .DS_Store
 Thumbs.db
 .claude/map/.cache.json
