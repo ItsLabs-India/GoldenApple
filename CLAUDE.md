@@ -109,7 +109,9 @@ mindmap
 | `tests/room-test.js` | 246 | Host + two guests in one room (98 checks). |
 | `tests/smoke-test.js` | 694 | One browser on the harness, plus a touch phone client (337 checks). `createClient({coarse:true})` fakes a phone held sideways. |
 | `package.json` | — | `npm start` runs `npx serve -l 5500 .`; `npm test` runs `node tests/smoke-test.js && node tests/room-test.js`. No dependencies. |
-| `README.md` | — | User-facing docs, "Good first changes" table, storage notes, known limits. |
+| `README.md` | — | The GitHub store page for players (features, screenshots, controls, good to know). No developer or local-server notes. |
+| `showcase.html` | — | Standalone marketing page on GitHub Pages (`/showcase.html`), in the game's palette and fonts, using `docs/screenshots/promo-*.jpg`. The game itself stays at `index.html`. |
+| `docs/screenshots/` | — | Store and showcase images. `promo-*.jpg` are captioned Minecraft-style shots taken with mock coworkers in a throwaway browser (the app has no mock users). |
 | `.vscode/` | — | Live Server recommendation, port 5500, 2-space tabs, LF line endings. |
 
 There is no bundler, no framework and no server: rooms are peer-to-peer between browsers.

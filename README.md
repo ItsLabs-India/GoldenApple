@@ -2,9 +2,9 @@
 
 <p align="center"><b>A cosy block-style office campus where your team walks, works, plays and thanks each other with apples.</b></p>
 
-<p align="center"><a href="https://itslabs-india.github.io/GoldenApple/"><b>▶ Play now in your browser</b></a> · Free · No download · Desktop, phone and tablet</p>
+<p align="center"><a href="https://itslabs-india.github.io/GoldenApple/"><b>▶ Play now in your browser</b></a> · <a href="https://itslabs-india.github.io/GoldenApple/showcase.html">Take the tour</a> · Free · No download · Desktop, phone and tablet</p>
 
-![The Golden Apple campus from above](docs/screenshots/campus.jpg)
+![Walk the campus with your whole team](docs/screenshots/promo-walkthrough.jpg)
 
 ## About the game
 
@@ -14,10 +14,22 @@ Every day you get **10 apples** to give to coworkers for good work. Pick a reaso
 
 Bring your team in: one person opens a room, everyone else joins with a 6-letter code, link or QR code, and you share the same office live.
 
+## Thank your team, out loud
+
+![Meet your coworkers](docs/screenshots/promo-interacting.jpg)
+
+Click anyone on campus to see their card: their role, their status and how many apples they've collected. Poke them for a coffee break, or give them apples for good work.
+
+| | |
+|---|---|
+| ![Give apples for good work](docs/screenshots/promo-apples.jpg) | ![Become a Golden Apple](docs/screenshots/promo-golden.jpg) |
+| **Give apples.** Ten a day. Pick a reason, add a note, and watch them fly across the plaza. | **Become a Golden Apple.** Collect more than 10 and wear the golden crown, announced to the whole office. |
+
 ## Features
 
+![The Golden Apple campus from above](docs/screenshots/campus.jpg)
+
 ### 🌳 A whole campus to explore
-![The welcome arch and plaza](docs/screenshots/plaza.jpg)
 
 Walk through the **Golden Apple Campus** arch onto a plaza with a giant apple tree, then follow the paths to:
 - **Work Desks**: a bright glass office with 24 personal desks in six pods.
@@ -37,18 +49,29 @@ Around it all runs the **Green Loop**, a trail past a Solar Grove grazed by shee
 - **Desk:** choose its colour, chair, computer, a plant, a desk pet (cat, dog, hamster, bunny, goldfish or turtle) and a couple of decor items. Your desk is yours alone: only you can sit there.
 
 ### 🚲 Campus bikes
-![Riding a campus bike by the lake](docs/screenshots/bike.jpg)
+![Ride the Green Loop](docs/screenshots/promo-cycling.jpg)
 
 Five bike stands with two bikes each sit around the grounds. Grab one, ride the Green Loop at a real 16 km/h (25 when you pedal hard), ring the bell, and return it to any stand, or leave it on its kickstand for someone else. In a room, everyone sees who's riding which bike.
 
+### 💼 Your own desk
+![Your own desk in the Work Desks room](docs/screenshots/promo-office.jpg)
+
+Everyone gets one of 24 desks in a bright glass office, styled their way, from two monitors and a bonsai to a goldfish bowl. Coworkers who are away sit at their desks, so you always know who's around.
+
 ### 🍜 A pantry worth visiting
-![The Pantry](docs/screenshots/pantry.jpg)
+![Lunch at the Pantry](docs/screenshots/promo-pantry.jpg)
 
 - **The menu:** eight dishes at a time, from samosa and masala dosa to chicken biryani, sushi, watermelon and mango lassi. A fresh menu arrives every 5 minutes.
 - **Eating:** take a plate, sit at a cafe table and eat, with crunching, crumbs and the occasional burp.
 - **Coffee:** the machine brews a cup that perks you up for a while.
 
 ### 🎮 Things to do
+
+| | |
+|---|---|
+| ![Go fishing](docs/screenshots/promo-fishing.jpg) | ![Work out](docs/screenshots/promo-gym.jpg) |
+| ![Play together](docs/screenshots/promo-playground.jpg) | ![Hit the arcade](docs/screenshots/promo-arcade.jpg) |
+
 - **Arcade**: five retro cabinets in a ring under a spinning ARCADE sign: Paddle Duel, Snake Duel, Star Orchard, Brick Break and Apple Rush. Play alone against the computer, or have a coworker walk up and join as Player 2.
 - **Golden Reels**: ten slot machines with levers and flashing lights, played with free daily credits. No real money, ever.
 - **Tennis and badminton**: challenge someone in the other half of the court and play first to 10, win by 2. Real ball flight, a scoreboard and a crowd in the stands.
@@ -57,6 +80,8 @@ Five bike stands with two bikes each sit around the grounds. Grab one, ride the 
 - **Pokes and waves**: tap a coworker to see their card, double-tap to poke them, and every poke lands in their inbox.
 
 ### 💛 Look after yourself
+![Take a break](docs/screenshots/promo-restroom.jpg)
+
 Health, energy and a restroom bar change with everything you do.
 - **Food and coffee:** meals digest slowly, and coffee kicks in then wears off.
 - **Rest:** a sofa or a lakeside bench brings your energy back.
