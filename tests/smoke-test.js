@@ -654,6 +654,16 @@ store.ga_world = JSON.stringify({ v: 1, npc: { priya: { received: 14 } }, feed: 
   ok(G.cam.yaw === yaw1 && getEl('#crosshair').hidden, 'with the cursor back, moving the mouse doesn’t turn the camera and the crosshair hides');
   G.setMouseLook(false); ok(!G.mouseLook.on && JSON.parse(store.ga_mouselook) === false, 'and the option turns off again');
 
+  console.log('Release notes');
+  ok(G.RELEASES.length >= 1 && G.VERSION === G.RELEASES[0].v && G.RELEASES.every(r => /^\d+\.\d+\.\d+$/.test(r.v) && r.title && Array.isArray(r.notes) && r.notes.length), 'release notes load from js/releases.js, newest first, each with a version, a title and notes');
+  ok(G.RELEASES.every((r, i) => !i || r.v.localeCompare(G.RELEASES[i - 1].v, undefined, { numeric: true }) < 0), 'versions go down the list (the newest is first)');
+  G.openMenu(false); const menuHtml = getEl('#modalBody').innerHTML; G.closeModal();
+  G.openWhatsNew(); const news = getEl('#modalBody').innerHTML; G.closeModal();
+  ok(/id="mNews"/.test(menuHtml) && menuHtml.includes('v' + G.VERSION) && news.includes(G.RELEASES[0].title.replace(/’/g, '’')) && /Latest/.test(news), 'the Menu has a What’s new button and the version; What’s new lists every release with the latest marked');
+  ok(JSON.parse(store.ga_seen_release) === G.VERSION, 'a new player starts on the current version (no update notice)');
+  store.ga_seen_release = JSON.stringify('0.9.0'); G.noticeRelease(); await new Promise(r => setTimeout(r, 2400));
+  ok(getEl('#toasts').children.some(t => /updated to v/.test(t.innerHTML)) && JSON.parse(store.ga_seen_release) === G.VERSION, 'a returning player is told once what changed after an update');
+
   console.log('Duplicate email & returning user');
   G.logout();
   ok(G.state.mode === 'login' && !cookieJar.ga_session, 'logout clears session cookie');

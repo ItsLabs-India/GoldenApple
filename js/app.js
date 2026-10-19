@@ -3237,6 +3237,14 @@ $('#cardClose').addEventListener('click',closeCard);
 /* ---------- modals ---------- */
 const modal=$('#modal'),modalBody=$('#modalBody');
 function showModal(name,html){releaseMouse();if(!state.modal)sfx('open');state.modal=name;keys.clear();modalBody.innerHTML=html;modal.hidden=false;setTimeout(()=>{const f=$('#modalClose');if(f)f.focus();},10);}
+// release notes from js/releases.js (newest first; shared with the landing page)
+const RELEASES=Array.isArray(window.GA_RELEASES)?window.GA_RELEASES.filter(r=>r&&r.v):[],VERSION=RELEASES.length?RELEASES[0].v:'';
+function openWhatsNew(){
+  showModal('news','<h2 id="modalTitle">What’s new</h2>'+(RELEASES.length?RELEASES.map((r,i)=>'<section class="news-item'+(i?'':' latest')+'"><div class="news-head"><span class="code-chip">v'+esc(r.v)+'</span><span class="fine">'+esc(r.date||'')+'</span>'+(i?'':'<span class="news-new">Latest</span>')+'</div>'
+    +'<h3>'+esc(r.title||'')+'</h3><ul>'+(r.notes||[]).map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul></section>').join(''):'<p class="fine">No release notes yet.</p>'));}
+// once per update, a returning player is told what changed (first-time players start on the current version)
+function noticeRelease(){if(!VERSION)return;const seen=Store.get('ga_seen_release',null);Store.set('ga_seen_release',VERSION);if(!seen||seen===VERSION)return;
+  setTimeout(()=>toast('Golden Apple has been updated to v'+esc(VERSION)+': <b>'+esc(RELEASES[0].title||'')+'</b>. See Menu → What’s new.','gold',6000,ICON_APPLE),2200);}
 function closeModal(){if(state.modal)sfx('close');state.modal=null;modal.hidden=true;cvs.focus({preventScroll:true});}
 $('#modalClose').addEventListener('click',closeModal);
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
@@ -3280,10 +3288,11 @@ function openMenu(confirmDelete){
     +'<div class="storage-row"><span>Cookie</span><span class="'+(state.cookieOK?'ok':'bad')+'">'+(state.cookieOK?'Saved':'Blocked by browser')+'</span></div>'
     +'<div class="storage-row"><span>Local storage</span><span class="'+(Store.ok?'ok':'bad')+'">'+(Store.ok?'Saved':'Blocked by browser')+'</span></div>'
     +'<p class="fine">'+(state.cookieOK?'Next time you open this page on this browser, you’ll be logged straight back in.':Store.ok?'This browser blocks cookies in embedded pages, so your profile is kept in local storage instead. You’ll still be remembered here.':'This browser blocks both, so your profile lasts only until you close the page.')+'</p></div>')
-    +'<div class="menu-actions"><button class="btn" id="mEdit" type="button">Edit profile, avatar &amp; desk</button><button class="btn" id="mLogout" type="button">Log out</button></div>'
+    +'<div class="menu-actions"><button class="btn" id="mEdit" type="button">Edit profile, avatar &amp; desk</button><button class="btn" id="mNews" type="button">What’s new</button><button class="btn" id="mLogout" type="button">Log out</button></div>'
+    +(VERSION?'<p class="fine">Golden Apple v'+esc(VERSION)+'</p>':'')
     +(confirmDelete?'<div style="display:grid;gap:8px;padding:12px;border:2px solid var(--apple)"><p style="margin:0">Delete your profile, apples and inbox from '+(room.mode?'this room':'this browser')+'? This can’t be undone.</p><div class="menu-actions"><button class="btn btn-apple" id="mDelYes" type="button">Yes, delete my profile</button><button class="btn" id="mDelNo" type="button">Keep it</button></div></div>':'<button class="btn btn-ghost" id="mDel" type="button" style="justify-self:start">Delete my profile</button>'));
   const on=(id,fn)=>{const el=$('#'+id,modalBody);if(el)el.addEventListener('click',fn);};
-  on('mEdit',()=>{closeModal();openSetup('edit');});on('mLogout',logout);on('mRoom',openRoomModal);
+  on('mEdit',()=>{closeModal();openSetup('edit');});on('mNews',openWhatsNew);on('mLogout',logout);on('mRoom',openRoomModal);
   on('mDel',()=>openMenu(true));on('mDelNo',()=>openMenu(false));
   const mMus=$('#mMusic',modalBody),mFx=$('#mSfx',modalBody),mMu=$('#mMute',modalBody);
   if(mMus)mMus.addEventListener('input',()=>{SND.music=mMus.value/100;saveSound();});
@@ -3796,6 +3805,7 @@ function enterWorld(rec){
   if(unread.length){const ap=unread.filter(x=>x.type==='apple').reduce((a,x)=>a+x.count,0),pk=unread.filter(x=>x.type==='poke').length;
     setTimeout(()=>toast('While you were away: '+[ap?plural(ap,'apple'):'',pk?plural(pk,'poke'):''].filter(Boolean).join(' and ')+'. Open your inbox to read them.','gold',5200,ap?ICON_APPLE:ICON_POKE),900);}
   setTimeout(()=>{if(state.player)state.player.say('Hi, I’m '+rec.name.split(' ')[0]+'!',2400);},500);
+  noticeRelease();
 }
 function resumeWorld(){state.mode='world';applyViewOffset();$('#screen-login').hidden=true;$('#screen-setup').hidden=true;$('#hud').hidden=false;$('#hint').hidden=state.hintHidden;cvs.focus({preventScroll:true});}
 function leaveWorld(){
